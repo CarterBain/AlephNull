@@ -5,7 +5,7 @@ and execution of algorithmic trading strategies.
 The library is being developed under commission
 by [Carter Bain](carterbain.com). 
 
-The module is built on top of the Zipline library, 
+The module is built on top of the [Zipline library](https://github.com/quantopian/zipline), 
 the backbone of the web-based backtesting
 platform [Quantopian](https://www.quantopian.com) 
 
@@ -13,7 +13,7 @@ The aim of the module is to extend the features
 of Zipline, for use within an institutional framework. 
 We hope to use the module to standardize research across 
 our trade desk and support live execution across all 
-asset classes for our clients.
+asset classes for our clients. 
 
 Dependencies (zipline)
 ------------
