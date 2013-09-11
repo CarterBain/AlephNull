@@ -1,9 +1,9 @@
 from datetime import datetime
 import blist
-from zipline.utils.date_utils import EPOCH
+from alephnull.utils.date_utils import EPOCH
 from itertools import izip_longest
 from logbook import FileHandler
-from zipline.finance.blotter import ORDER_STATUS
+from alephnull.finance.blotter import ORDER_STATUS
 
 
 def setup_logger(test, path='test.log'):

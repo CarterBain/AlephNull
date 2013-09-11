@@ -20,9 +20,9 @@ import statsmodels.api as sm
 from datetime import datetime
 import pytz
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.transforms import batch_transform
-from zipline.utils.factory import load_from_yahoo
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.transforms import batch_transform
+from alephnull.utils.factory import load_from_yahoo
 
 
 @batch_transform

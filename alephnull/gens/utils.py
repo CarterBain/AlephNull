@@ -19,7 +19,7 @@ import numbers
 
 from hashlib import md5
 from datetime import datetime
-from zipline.protocol import DATASOURCE_TYPE
+from alephnull.protocol import DATASOURCE_TYPE
 
 
 def hash_args(*args, **kwargs):

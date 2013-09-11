@@ -27,9 +27,9 @@ from datetime import datetime
 from collections import deque
 from abc import ABCMeta, abstractmethod
 
-from zipline.protocol import DATASOURCE_TYPE
-from zipline.gens.utils import assert_sort_unframe_protocol, hash_args
-import zipline.finance.trading as trading
+from alephnull.protocol import DATASOURCE_TYPE
+from alephnull.gens.utils import assert_sort_unframe_protocol, hash_args
+import alephnull.finance.trading as trading
 
 log = logbook.Logger('Transform')
 

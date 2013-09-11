@@ -59,7 +59,7 @@ import logbook
 import datetime
 from dateutil.relativedelta import relativedelta
 
-from zipline.utils.date_utils import epoch_now
+from alephnull.utils.date_utils import epoch_now
 
 from . period import RiskMetricsPeriod
 

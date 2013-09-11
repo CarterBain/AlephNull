@@ -3,8 +3,8 @@ from abc import (
     abstractproperty
 )
 
-from zipline.protocol import DATASOURCE_TYPE
-from zipline.protocol import Event
+from alephnull.protocol import DATASOURCE_TYPE
+from alephnull.protocol import Event
 
 
 class DataSource(object):

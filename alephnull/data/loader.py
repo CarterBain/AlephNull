@@ -26,9 +26,9 @@ from . treasuries import get_treasury_data
 from . import benchmarks
 from . benchmarks import get_benchmark_returns
 
-from zipline.protocol import DailyReturn
-from zipline.utils.date_utils import tuple_to_date
-from zipline.utils.tradingcalendar import trading_days
+from alephnull.protocol import DailyReturn
+from alephnull.utils.date_utils import tuple_to_date
+from alephnull.utils.tradingcalendar import trading_days
 from operator import attrgetter
 
 logger = logbook.Logger('Loader')

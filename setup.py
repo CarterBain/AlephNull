@@ -41,7 +41,7 @@ else:
     LONG_DESCRIPTION = README_MARKDOWN
 
 setup(
-    name='zipline',
+    name='alephnull',
     version='0.5.11.dev',
     description='A backtester for financial algorithms.',
     author='Quantopian Inc.',

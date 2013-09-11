@@ -14,13 +14,13 @@
 # limitations under the License.
 from logbook import Logger, Processor
 
-import zipline.finance.trading as trading
-from zipline.protocol import (
+import alephnull.finance.trading as trading
+from alephnull.protocol import (
     BarData,
     SIDData,
     DATASOURCE_TYPE
 )
-from zipline.gens.utils import hash_args
+from alephnull.gens.utils import hash_args
 
 log = Logger('Trade Simulation')
 

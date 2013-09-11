@@ -74,8 +74,8 @@ The algorithm must expose methods:
 from copy import deepcopy
 import numpy as np
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.finance.slippage import FixedSlippage
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.finance.slippage import FixedSlippage
 
 
 class TestAlgorithm(TradingAlgorithm):
@@ -332,9 +332,9 @@ class TestTargetValueAlgorithm(TradingAlgorithm):
         self.target_shares = np.round(20 / data[0].price)
 
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.transforms import BatchTransform, batch_transform
-from zipline.transforms import MovingAverage
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.transforms import BatchTransform, batch_transform
+from alephnull.transforms import MovingAverage
 
 
 class TestRegisterTransformAlgorithm(TradingAlgorithm):

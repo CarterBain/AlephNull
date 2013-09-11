@@ -4,10 +4,10 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.transforms import MovingAverage
-from zipline.utils.factory import load_from_yahoo
-from zipline.finance import commission
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.transforms import MovingAverage
+from alephnull.utils.factory import load_from_yahoo
+from alephnull.finance import commission
 
 zipline_logging = logbook.NestedSetup([
     logbook.NullHandler(level=logbook.DEBUG, bubble=True),

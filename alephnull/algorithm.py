@@ -23,34 +23,34 @@ from datetime import datetime
 from itertools import groupby, ifilter
 from operator import attrgetter
 
-from zipline.errors import (
+from alephnull.errors import (
     UnsupportedSlippageModel,
     OverrideSlippagePostInit,
     UnsupportedCommissionModel,
     OverrideCommissionPostInit
 )
-from zipline.finance.performance import PerformanceTracker
-from zipline.sources import DataFrameSource, DataPanelSource
-from zipline.utils.factory import create_simulation_parameters
-from zipline.transforms.utils import StatefulTransform
-from zipline.finance.slippage import (
+from alephnull.finance.performance import PerformanceTracker
+from alephnull.sources import DataFrameSource, DataPanelSource
+from alephnull.utils.factory import create_simulation_parameters
+from alephnull.transforms.utils import StatefulTransform
+from alephnull.finance.slippage import (
     VolumeShareSlippage,
     SlippageModel,
     transact_partial
 )
-from zipline.finance.commission import PerShare, PerTrade
-from zipline.finance.blotter import Blotter
-from zipline.finance.constants import ANNUALIZER
-import zipline.finance.trading as trading
-import zipline.protocol
-from zipline.protocol import Event
+from alephnull.finance.commission import PerShare, PerTrade
+from alephnull.finance.blotter import Blotter
+from alephnull.finance.constants import ANNUALIZER
+import alephnull.finance.trading as trading
+import alephnull.protocol
+from alephnull.protocol import Event
 
-from zipline.gens.composites import (
+from alephnull.gens.composites import (
     date_sorted_sources,
     sequential_transforms,
     alias_dt
 )
-from zipline.gens.tradesimulation import AlgorithmSimulator
+from alephnull.gens.tradesimulation import AlgorithmSimulator
 
 DEFAULT_CAPITAL_BASE = float("1.0e5")
 
@@ -174,7 +174,7 @@ class TradingAlgorithm(object):
             benchmark_return_source = [
                 Event({'dt': ret.date,
                        'returns': ret.returns,
-                       'type': zipline.protocol.DATASOURCE_TYPE.BENCHMARK,
+                       'type': alephnull.protocol.DATASOURCE_TYPE.BENCHMARK,
                        'source_id': 'benchmarks'})
                 for ret in trading.environment.benchmark_returns
                 if ret.date.date() >= sim_params.period_start.date()

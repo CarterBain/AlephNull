@@ -15,8 +15,8 @@
 
 from collections import defaultdict
 
-from zipline.transforms.utils import EventWindow, TransformMeta
-from zipline.errors import WrongDataForTransform
+from alephnull.transforms.utils import EventWindow, TransformMeta
+from alephnull.errors import WrongDataForTransform
 
 
 class MovingAverage(object):

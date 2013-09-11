@@ -138,9 +138,9 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict, defaultdict
 
-import zipline.protocol as zp
-import zipline.finance.risk as risk
-import zipline.finance.trading as trading
+import alephnull.protocol as zp
+import alephnull.finance.risk as risk
+import alephnull.finance.trading as trading
 
 log = logbook.Logger('Performance')
 

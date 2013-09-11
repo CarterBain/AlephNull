@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from zipline.errors import WrongDataForTransform
-from zipline.transforms.utils import TransformMeta
+from alephnull.errors import WrongDataForTransform
+from alephnull.transforms.utils import TransformMeta
 from collections import defaultdict, deque
 
 

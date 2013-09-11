@@ -19,9 +19,9 @@ Tools to generate data sources.
 """
 import pandas as pd
 
-from zipline.gens.utils import hash_args
+from alephnull.gens.utils import hash_args
 
-from zipline.sources.data_source import DataSource
+from alephnull.sources.data_source import DataSource
 
 
 class DataFrameSource(DataSource):

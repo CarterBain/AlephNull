@@ -27,8 +27,8 @@ import sys
 
 import msgpack
 
-import zipline.data.loader as loader
-from zipline.utils.date_utils import tuple_to_date
+import alephnull.data.loader as loader
+from alephnull.utils.date_utils import tuple_to_date
 
 
 DATA_SOURCES = {

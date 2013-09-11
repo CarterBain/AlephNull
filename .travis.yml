@@ -10,6 +10,6 @@ install:
   - cat etc/requirements_dev.txt  | grep -v "^#" | grep -v "^$" | grep -v ipython | grep -v nose== | grep -v scipy | grep -v matplotlib | grep -v statsmodels | grep -v patsy | xargs pip install --use-mirrors
   - etc/ordered_pip.sh etc/requirements.txt
 before_script:
-  - "flake8 zipline tests"
+  - "flake8 alephnull tests"
 script:
   - nosetests --exclude=^test_examples

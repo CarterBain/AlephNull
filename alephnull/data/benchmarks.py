@@ -27,7 +27,7 @@ from . loader_utils import (
     source_to_records,
     Mapping
 )
-from zipline.protocol import DailyReturn
+from alephnull.protocol import DailyReturn
 
 
 class BenchmarkDataNotFoundError(Exception):

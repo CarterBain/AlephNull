@@ -20,20 +20,20 @@ from logbook import Logger
 from collections import defaultdict
 import numpy as np
 
-import zipline.errors
-import zipline.protocol as zp
+import alephnull.errors
+import alephnull.protocol as zp
 
-from zipline.finance.slippage import (
+from alephnull.finance.slippage import (
     VolumeShareSlippage,
     transact_partial,
     check_order_triggers
 )
-from zipline.finance.commission import PerShare
-import zipline.utils.math_utils as zp_math
+from alephnull.finance.commission import PerShare
+import alephnull.utils.math_utils as zp_math
 
 log = Logger('Blotter')
 
-from zipline.utils.protocol_utils import Enum
+from alephnull.utils.protocol_utils import Enum
 
 ORDER_STATUS = Enum(
     'OPEN',
@@ -201,12 +201,12 @@ class Blotter(object):
                 continue
 
             if txn.amount == 0:
-                raise zipline.errors.TransactionWithNoAmount(txn=txn)
+                raise alephnull.errors.TransactionWithNoAmount(txn=txn)
             if math.copysign(1, txn.amount) != order.direction:
-                raise zipline.errors.TransactionWithWrongDirection(
+                raise alephnull.errors.TransactionWithWrongDirection(
                     txn=txn, order=order)
             if abs(txn.amount) > abs(self.orders[txn.order_id].amount):
-                raise zipline.errors.TransactionVolumeExceedsOrder(
+                raise alephnull.errors.TransactionVolumeExceedsOrder(
                     txn=txn, order=order)
 
             order.filled += txn.amount

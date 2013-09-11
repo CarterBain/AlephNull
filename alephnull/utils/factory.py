@@ -27,13 +27,13 @@ from pandas.io.data import DataReader
 import numpy as np
 from datetime import datetime, timedelta
 
-from zipline.protocol import DailyReturn, Event, DATASOURCE_TYPE
-from zipline.sources import (SpecificEquityTrades,
+from alephnull.protocol import DailyReturn, Event, DATASOURCE_TYPE
+from alephnull.sources import (SpecificEquityTrades,
                              DataFrameSource,
                              DataPanelSource)
-from zipline.finance.trading import SimulationParameters
-import zipline.finance.trading as trading
-from zipline.sources.test_source import (
+from alephnull.finance.trading import SimulationParameters
+import alephnull.finance.trading as trading
+from alephnull.sources.test_source import (
     date_gen,
     create_trade
 )

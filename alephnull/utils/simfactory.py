@@ -1,6 +1,6 @@
-import zipline.utils.factory as factory
+import alephnull.utils.factory as factory
 
-from zipline.test_algorithms import TestAlgorithm
+from alephnull.test_algorithms import TestAlgorithm
 
 
 def create_test_zipline(**config):

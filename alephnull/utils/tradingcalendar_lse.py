@@ -27,7 +27,7 @@ import pandas as pd
 
 from datetime import datetime
 from dateutil import rrule
-from zipline.utils.tradingcalendar import end
+from alephnull.utils.tradingcalendar import end
 
 start = datetime(2002, 1, 1, tzinfo=pytz.utc)
 

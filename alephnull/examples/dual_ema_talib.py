@@ -16,11 +16,11 @@
 
 import matplotlib.pyplot as plt
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.utils.factory import load_from_yahoo
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.utils.factory import load_from_yahoo
 
 # Import exponential moving average from talib wrapper
-from zipline.transforms.ta import EMA
+from alephnull.transforms.ta import EMA
 
 from datetime import datetime
 import pytz

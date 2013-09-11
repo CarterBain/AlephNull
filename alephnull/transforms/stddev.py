@@ -16,9 +16,9 @@
 from collections import defaultdict
 from math import sqrt
 
-from zipline.errors import WrongDataForTransform
-from zipline.transforms.utils import EventWindow, TransformMeta
-import zipline.utils.math_utils as zp_math
+from alephnull.errors import WrongDataForTransform
+from alephnull.transforms.utils import EventWindow, TransformMeta
+import alephnull.utils.math_utils as zp_math
 
 
 class MovingStandardDev(object):

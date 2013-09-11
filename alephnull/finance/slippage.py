@@ -20,8 +20,8 @@ import math
 
 from copy import copy
 from functools import partial
-from zipline.protocol import DATASOURCE_TYPE
-import zipline.utils.math_utils as zp_math
+from alephnull.protocol import DATASOURCE_TYPE
+import alephnull.utils.math_utils as zp_math
 
 
 def check_order_triggers(order, event):

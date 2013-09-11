@@ -57,7 +57,7 @@ docs/_build/*
 benchmarks.db
 
 # downloaded data
-zipline/data/*.msgpack
+alephnull/data/*.msgpack
 
 # Vagrant temp folder
 .vagrant

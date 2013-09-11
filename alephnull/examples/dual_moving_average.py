@@ -17,10 +17,10 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from zipline.algorithm import TradingAlgorithm
-import zipline.finance.trading as trading
-from zipline.transforms import MovingAverage
-from zipline.utils.factory import load_from_yahoo
+from alephnull.algorithm import TradingAlgorithm
+import alephnull.finance.trading as trading
+from alephnull.transforms import MovingAverage
+from alephnull.utils.factory import load_from_yahoo
 
 from datetime import datetime
 import pytz

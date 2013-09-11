@@ -23,12 +23,12 @@ from itertools import cycle, ifilter, izip
 from datetime import datetime, timedelta
 import numpy as np
 
-from zipline.protocol import (
+from alephnull.protocol import (
     Event,
     DATASOURCE_TYPE
 )
-from zipline.gens.utils import hash_args
-from zipline.utils.tradingcalendar import trading_days
+from alephnull.gens.utils import hash_args
+from alephnull.utils.tradingcalendar import trading_days
 
 
 def create_trade(sid, price, amount, datetime, source_id="test_factory"):

@@ -26,10 +26,10 @@ from numbers import Integral
 
 import pandas as pd
 
-from zipline.utils.data import RollingPanel
-from zipline.protocol import Event
+from alephnull.utils.data import RollingPanel
+from alephnull.protocol import Event
 
-import zipline.finance.trading as trading
+import alephnull.finance.trading as trading
 
 from . utils import check_window_length
 

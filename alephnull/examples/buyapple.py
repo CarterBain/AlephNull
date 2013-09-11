@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import pytz
 
-from zipline.algorithm import TradingAlgorithm
-from zipline.utils.factory import load_from_yahoo
+from alephnull.algorithm import TradingAlgorithm
+from alephnull.utils.factory import load_from_yahoo
 
 
 class BuyApple(TradingAlgorithm):  # inherit from TradingAlgorithm

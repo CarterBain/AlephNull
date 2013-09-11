@@ -18,7 +18,7 @@ import math
 import numpy as np
 import numpy.linalg as la
 
-import zipline.finance.trading as trading
+import alephnull.finance.trading as trading
 
 import pandas as pd
 
