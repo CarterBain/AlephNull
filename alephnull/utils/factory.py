@@ -434,8 +434,7 @@ must specify stocks or indexes"""
             data[name] = stkd
 
     return data
-
-
+	
 def load_from_yahoo(indexes=None,
                     stocks=None,
                     start=None,
@@ -467,7 +466,6 @@ def load_from_yahoo(indexes=None,
     df = pd.DataFrame({key: d[close_key] for key, d in data.iteritems()})
     df.index = df.index.tz_localize(pytz.utc)
     return df
-
 
 def load_bars_from_yahoo(indexes=None,
                          stocks=None,
