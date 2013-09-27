@@ -77,15 +77,17 @@ class FuturesDB(object):
                     result_dict[contract_month] = price
                 return result_dict
         else:
+            symbol_dict = {}
             result_dict = {}
             self.cursor.execute("SELECT s_id, symbol FROM symbols WHERE t_parent=?", (t_record['t_id'],))
             for s_id, symbol in self.cursor:
-                result_dict[symbol] = s_id
+                symbol_dict[symbol] = s_id
             
-            for symbol, s_id in result_dict.iterkeys():
+            for symbol, s_id in symbol_dict.iteritems():
+                result_dict[symbol] = {}
                 self.cursor.execute("SELECT contract_month, price FROM contracts WHERE s_parent=?", (s_id,))
                 for contract_month, price in self.cursor:
-                    result_dict[symbol] = {contract_month: price}
+                    result_dict[symbol][contract_month] = {"Price": price}
             
             return result_dict
                     
