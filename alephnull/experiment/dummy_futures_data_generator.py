@@ -94,14 +94,12 @@ def create_dummy_universe_dict():
             
             if timestamps.last() in universe_dict:
                 old_price = universe_dict[timestamps.last()][symbol][expiry]["Price"]
-                percent_change = 0.2
-                change_scale = (random.random()) * percent_change * 2 + (1 - percent_change)
-                new_price = old_price * change_scale
+                price_percent_change = 0.1
+                new_price = random.gauss(mu=old_price, sigma=old_price * price_percent_change)
                 
                 old_open_interest = universe_dict[timestamps.last()][symbol][expiry]["Open Interest"]
-                percent_change = 0.08
-                change_scale = (random.random()) * percent_change * 2 + (1 - percent_change)
-                new_open_interest = old_open_interest * change_scale
+                open_interest_percent_change = 0.1
+                new_open_interest = random.gauss(mu=old_open_interest, sigma=old_open_interest * open_interest_percent_change)
             else:
                 # First price
                 new_price = random.random() * 100
