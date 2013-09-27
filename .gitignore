@@ -61,6 +61,3 @@ alephnull/data/*.msgpack
 
 # Vagrant temp folder
 .vagrant
-
-# Experimentation folder
-alephnull/experiment
