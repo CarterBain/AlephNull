@@ -16,11 +16,14 @@
 
 import os
 from os.path import expanduser
-import msgpack
 from collections import OrderedDict
 from datetime import timedelta
 
 import logbook
+
+import pandas as pd
+from pandas.io.data import DataReader
+import pytz
 
 from . treasuries import get_treasury_data
 from . import benchmarks
@@ -30,6 +33,8 @@ from alephnull.protocol import DailyReturn
 from alephnull.utils.date_utils import tuple_to_date
 from alephnull.utils.tradingcalendar import trading_days
 from operator import attrgetter
+from alephnull.protocol import DailyReturn
+from alephnull.utils.tradingcalendar import trading_days
 
 logger = logbook.Logger('Loader')
 
@@ -38,6 +43,12 @@ DATA_PATH = os.path.join(
     expanduser("~"),
     '.zipline',
     'data'
+)
+
+CACHE_PATH = os.path.join(
+    expanduser("~"),
+    '.zipline',
+    'cache'
 )
 
 
@@ -54,24 +65,32 @@ def get_datafile(name, mode='r'):
     return open(os.path.join(DATA_PATH, name), mode)
 
 
+def get_cache_filepath(name):
+    if not os.path.exists(CACHE_PATH):
+        os.makedirs(CACHE_PATH)
+
+    return os.path.join(CACHE_PATH, name)
+
+
 def dump_treasury_curves():
     """
     Dumps data to be used with zipline.
 
     Puts source treasury and data into zipline.
     """
-    tr_data = []
+    tr_data = {}
 
     for curve in get_treasury_data():
-        date_as_tuple = curve['date'].timetuple()[0:6] + \
-            (curve['date'].microsecond,)
         # Not ideal but massaging data into expected format
-        del curve['date']
-        tr = (date_as_tuple, curve)
-        tr_data.append(tr)
+        tr_data[curve['date']] = curve
 
-    with get_datafile('treasury_curves.msgpack', mode='wb') as tr_fp:
-        tr_fp.write(msgpack.dumps(tr_data))
+    curves = pd.DataFrame(tr_data).T
+
+    datafile = get_datafile('treasury_curves.csv', mode='wb')
+    curves.to_csv(datafile)
+    datafile.close()
+
+    return curves
 
 
 def dump_benchmarks(symbol):
@@ -82,40 +101,14 @@ def dump_benchmarks(symbol):
     """
     benchmark_data = []
     for daily_return in get_benchmark_returns(symbol):
-        date_as_tuple = daily_return.date.timetuple()[0:6] + \
-            (daily_return.date.microsecond,)
         # Not ideal but massaging data into expected format
-        benchmark = (date_as_tuple, daily_return.returns)
+        benchmark = (daily_return.date, daily_return.returns)
         benchmark_data.append(benchmark)
 
-    with get_datafile(get_benchmark_filename(symbol), mode='wb') as bmark_fp:
-        bmark_fp.write(msgpack.dumps(benchmark_data))
-
-
-def update_treasury_curves(last_date):
-    """
-    Updates data in the zipline treasury curves message pack
-
-    last_date should be a datetime object of the most recent data
-
-    Puts source treasury and data into zipline.
-    """
-    tr_data = []
-    with get_datafile('treasury_curves.msgpack', mode='rb') as tr_fp:
-        tr_list = msgpack.loads(tr_fp.read())
-        for packed_date, curve in tr_list:
-            tr_data.append((packed_date, curve))
-
-    for curve in get_treasury_data():
-        date_as_tuple = curve['date'].timetuple()[0:6] + \
-            (curve['date'].microsecond,)
-        # Not ideal but massaging data into expected format
-        del curve['date']
-        tr = (date_as_tuple, curve)
-        tr_data.append(tr)
-
-    with get_datafile('treasury_curves.msgpack', mode='wb') as tr_fp:
-        tr_fp.write(msgpack.dumps(tr_data))
+    datafile = get_datafile(get_benchmark_filename(symbol), mode='wb')
+    benchmark_returns = pd.Series(dict(benchmark_data))
+    benchmark_returns.to_csv(datafile)
+    datafile.close()
 
 
 def update_benchmarks(symbol, last_date):
@@ -126,30 +119,27 @@ def update_benchmarks(symbol, last_date):
 
     Puts source benchmark into zipline.
     """
-    benchmark_data = []
-    with get_datafile(get_benchmark_filename(symbol), mode='rb') as bmark_fp:
-        bm_list = msgpack.loads(bmark_fp.read())
-        for packed_date, returns in bm_list:
-            benchmark_data.append((packed_date, returns))
+    datafile = get_datafile(get_benchmark_filename(symbol), mode='rb')
+    saved_benchmarks = pd.Series.from_csv(datafile)
+    datafile.close()
 
     try:
         start = last_date + timedelta(days=1)
         for daily_return in get_benchmark_returns(symbol, start_date=start):
-            date_as_tuple = daily_return.date.timetuple()[0:6] + \
-                (daily_return.date.microsecond,)
             # Not ideal but massaging data into expected format
-            benchmark = (date_as_tuple, daily_return.returns)
-            benchmark_data.append(benchmark)
+            benchmark = pd.Series({daily_return.date: daily_return.returns})
+            saved_benchmarks = saved_benchmarks.append(benchmark)
 
-        with get_datafile(
-                get_benchmark_filename(symbol), mode='wb') as bmark_fp:
-            bmark_fp.write(msgpack.dumps(benchmark_data))
+        datafile = get_datafile(get_benchmark_filename(symbol), mode='wb')
+        saved_benchmarks.to_csv(datafile)
+        datafile.close()
     except benchmarks.BenchmarkDataNotFoundError as exc:
         logger.warn(exc)
+    return saved_benchmarks
 
 
 def get_benchmark_filename(symbol):
-    return "%s_benchmark.msgpack" % symbol
+    return "%s_benchmark.csv" % symbol
 
 
 def load_market_data(bm_symbol='^GSPC'):
@@ -157,69 +147,64 @@ def load_market_data(bm_symbol='^GSPC'):
         fp_bm = get_datafile(get_benchmark_filename(bm_symbol), "rb")
     except IOError:
         print("""
-data msgpacks aren't distributed with source.
+data files aren't distributed with source.
 Fetching data from Yahoo Finance.
 """).strip()
         dump_benchmarks(bm_symbol)
         fp_bm = get_datafile(get_benchmark_filename(bm_symbol), "rb")
 
-    bm_list = msgpack.loads(fp_bm.read())
+    saved_benchmarks = pd.Series.from_csv(fp_bm)
+    fp_bm.close()
 
     # Find the offset of the last date for which we have trading data in our
     # list of valid trading days
-    last_bm_date = tuple_to_date(bm_list[-1][0])
+    last_bm_date = saved_benchmarks.index[-1]
     last_bm_date_offset = trading_days.searchsorted(
         last_bm_date.strftime('%Y/%m/%d'))
 
     # If more than 1 trading days has elapsed since the last day where
     # we have data,then we need to update
     if len(trading_days) - last_bm_date_offset > 1:
-        update_benchmarks(bm_symbol, last_bm_date)
-        fp_bm = get_datafile(get_benchmark_filename(bm_symbol), "rb")
-        bm_list = msgpack.loads(fp_bm.read())
+        benchmark_returns = update_benchmarks(bm_symbol, last_bm_date)
+    else:
+        benchmark_returns = saved_benchmarks
+        benchmark_returns = benchmark_returns.tz_localize('UTC')
 
     bm_returns = []
-    for packed_date, returns in bm_list:
-        event_dt = tuple_to_date(packed_date)
-
-        daily_return = DailyReturn(date=event_dt, returns=returns)
+    for dt, returns in benchmark_returns.iterkv():
+        daily_return = DailyReturn(date=dt, returns=returns)
         bm_returns.append(daily_return)
 
-    fp_bm.close()
-
-    bm_returns = sorted(bm_returns, key=attrgetter('date'))
-
     try:
-        fp_tr = get_datafile('treasury_curves.msgpack', "rb")
+        fp_tr = get_datafile('treasury_curves.csv', "rb")
     except IOError:
         print("""
-data msgpacks aren't distributed with source.
+data files aren't distributed with source.
 Fetching data from data.treasury.gov
 """).strip()
         dump_treasury_curves()
-        fp_tr = get_datafile('treasury_curves.msgpack', "rb")
+        fp_tr = get_datafile('treasury_curves.csv', "rb")
 
-    tr_list = msgpack.loads(fp_tr.read())
+    saved_curves = pd.DataFrame.from_csv(fp_tr)
 
     # Find the offset of the last date for which we have trading data in our
     # list of valid trading days
-    last_tr_date = tuple_to_date(tr_list[-1][0])
+    last_tr_date = saved_curves.index[-1]
     last_tr_date_offset = trading_days.searchsorted(
         last_tr_date.strftime('%Y/%m/%d'))
 
     # If more than 1 trading days has elapsed since the last day where
     # we have data,then we need to update
     if len(trading_days) - last_tr_date_offset > 1:
-        update_treasury_curves(last_tr_date)
-        fp_tr = get_datafile('treasury_curves.msgpack', "rb")
-        tr_list = msgpack.loads(fp_tr.read())
+        treasury_curves = dump_treasury_curves()
+    else:
+        treasury_curves = saved_curves.tz_localize('UTC')
 
     tr_curves = {}
-    for packed_date, curve in tr_list:
-        tr_dt = tuple_to_date(packed_date)
+    for tr_dt, curve in treasury_curves.T.iterkv():
         # tr_dt = tr_dt.replace(hour=0, minute=0, second=0, microsecond=0,
         #                       tzinfo=pytz.utc)
-        tr_curves[tr_dt] = curve
+        tr_curves[tr_dt] = curve.to_dict()
 
     fp_tr.close()
 
@@ -228,3 +213,139 @@ Fetching data from data.treasury.gov
                             key=lambda t: t[0]))
 
     return bm_returns, tr_curves
+
+
+def _load_raw_yahoo_data(indexes=None, stocks=None, start=None, end=None):
+    """Load closing prices from yahoo finance.
+
+    :Optional:
+        indexes : dict (Default: {'SPX': '^GSPC'})
+            Financial indexes to load.
+        stocks : list (Default: ['AAPL', 'GE', 'IBM', 'MSFT',
+                                 'XOM', 'AA', 'JNJ', 'PEP', 'KO'])
+            Stock closing prices to load.
+        start : datetime (Default: datetime(1993, 1, 1, 0, 0, 0, 0, pytz.utc))
+            Retrieve prices from start date on.
+        end : datetime (Default: datetime(2002, 1, 1, 0, 0, 0, 0, pytz.utc))
+            Retrieve prices until end date.
+
+    :Note:
+        This is based on code presented in a talk by Wes McKinney:
+        http://wesmckinney.com/files/20111017/notebook_output.pdf
+    """
+
+    assert indexes is not None or stocks is not None, """
+must specify stocks or indexes"""
+
+    if start is None:
+        start = pd.datetime(1990, 1, 1, 0, 0, 0, 0, pytz.utc)
+
+    if not start is None and not end is None:
+        assert start < end, "start date is later than end date."
+
+    data = OrderedDict()
+
+    if stocks is not None:
+        for stock in stocks:
+            print stock
+            cache_filename = "{stock}-{start}-{end}.csv".format(
+                stock=stock,
+                start=start,
+                end=end)
+            cache_filepath = get_cache_filepath(cache_filename)
+            if os.path.exists(cache_filepath):
+                stkd = pd.DataFrame.from_csv(cache_filepath)
+            else:
+                stkd = DataReader(stock, 'yahoo', start, end).sort_index()
+                stkd.to_csv(cache_filepath)
+            data[stock] = stkd
+
+    if indexes is not None:
+        for name, ticker in indexes.iteritems():
+            print name
+            stkd = DataReader(ticker, 'yahoo', start, end).sort_index()
+            data[name] = stkd
+
+    return data
+
+
+def load_from_yahoo(indexes=None,
+                    stocks=None,
+                    start=None,
+                    end=None,
+                    adjusted=True):
+    """
+    Loads price data from Yahoo into a dataframe for each of the indicated
+    securities.  By default, 'price' is taken from Yahoo's 'Adjusted Close',
+    which removes the impact of splits and dividends. If the argument
+    'adjusted' is False, then the non-adjusted 'close' field is used instead.
+
+    :param indexes: Financial indexes to load.
+    :type indexes: dict
+    :param stocks: Stock closing prices to load.
+    :type stocks: list
+    :param start: Retrieve prices from start date on.
+    :type start: datetime
+    :param end: Retrieve prices until end date.
+    :type end: datetime
+    :param adjusted: Adjust the price for splits and dividends.
+    :type adjusted: bool
+
+    """
+    data = _load_raw_yahoo_data(indexes, stocks, start, end)
+    if adjusted:
+        close_key = 'Adj Close'
+    else:
+        close_key = 'Close'
+    df = pd.DataFrame({key: d[close_key] for key, d in data.iteritems()})
+    df.index = df.index.tz_localize(pytz.utc)
+    return df
+
+
+def load_bars_from_yahoo(indexes=None,
+                         stocks=None,
+                         start=None,
+                         end=None,
+                         adjusted=True):
+    """
+    Loads data from Yahoo into a panel with the following
+    column names for each indicated security:
+
+        - open
+        - high
+        - low
+        - close
+        - volume
+        - price
+
+    Note that 'price' is Yahoo's 'Adjusted Close', which removes the
+    impact of splits and dividends. If the argument 'adjusted' is True, then
+    the open, high, low, and close values are adjusted as well.
+
+    :param indexes: Financial indexes to load.
+    :type indexes: dict
+    :param stocks: Stock closing prices to load.
+    :type stocks: list
+    :param start: Retrieve prices from start date on.
+    :type start: datetime
+    :param end: Retrieve prices until end date.
+    :type end: datetime
+    :param adjusted: Adjust open/high/low/close for splits and dividends.
+        The 'price' field is always adjusted.
+    :type adjusted: bool
+
+    """
+    data = _load_raw_yahoo_data(indexes, stocks, start, end)
+    panel = pd.Panel(data)
+    # Rename columns
+    panel.minor_axis = ['open', 'high', 'low', 'close', 'volume', 'price']
+    panel.major_axis = panel.major_axis.tz_localize(pytz.utc)
+    # Adjust data
+    if adjusted:
+        adj_cols = ['open', 'high', 'low', 'close']
+        for ticker in panel.items:
+            ratio = (panel[ticker]['price'] / panel[ticker]['close'])
+            ratio_filtered = ratio.fillna(0).values
+            for col in adj_cols:
+                panel[ticker][col] *= ratio_filtered
+    return panel
