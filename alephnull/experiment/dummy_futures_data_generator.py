@@ -46,14 +46,16 @@ class PrevIterator(object):
         
     def last(self):
         return self.last_element
-        
+
+
 def lazy_contracts():
     for symbol, months in ACCEPTABLE_SYMBOLS.iteritems():
         for month in list(months):
             for year in range(datetime.date.today().year, 2020 + 1):
                 short_year = year - 2000
                 yield (symbol, month, str(short_year))
-                
+
+
 def lazy_timestamps():
     start = Timestamp('2013-05-13 13:30:00+0000', tz='UTC')
     end = Timestamp('2013-09-11 20:30:00+0000', tz='UTC')
@@ -77,6 +79,7 @@ def lazy_timestamps():
             running_timestamp = running_timestamp.replace(tzinfo=pytz.UTC)
             running_timestamp = Timestamp(running_timestamp)
 
+
 def create_dummy_universe_dict():
     """
     WARNING: Because the underlying data structure has to be highly nested, the logic in here
@@ -99,17 +102,27 @@ def create_dummy_universe_dict():
                 
                 old_open_interest = universe_dict[timestamps.last()][symbol][expiry]["Open Interest"]
                 open_interest_percent_change = 0.1
-                new_open_interest = random.gauss(mu=old_open_interest, sigma=old_open_interest * open_interest_percent_change)
+                new_open_interest = random.gauss(mu=old_open_interest,
+                                                 sigma=old_open_interest * open_interest_percent_change)
+
+                # For now, assume all margin requirements stay static.
+                # In the future: read the SPAN Margining handout for an algorithm
+                old_margin_requirements = universe_dict[timestamps.last()][symbol][expiry]["Margin Requirements"]
+                new_margin_requirements = old_margin_requirements
             else:
                 # First price
                 new_price = random.random() * 100
                 new_open_interest = random.random() * 2000
+                new_margin_requirements = 100.00
                 
             new_price = round(new_price, 2)
             universe_dict[timestamp][symbol][expiry]["Price"] = new_price
             
             new_open_interest = int(round(new_open_interest, 0))
             universe_dict[timestamp][symbol][expiry]["Open Interest"] = new_open_interest
+
+            new_margin_requirements = round(new_margin_requirements, 2)
+            universe_dict[timestamp][symbol][expiry]["Margin Requirements"] = new_margin_requirements
         
     return universe_dict
 

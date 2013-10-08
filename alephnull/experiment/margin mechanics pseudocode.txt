@@ -1,0 +1,43 @@
+for all position@(yesterday's price, today's price, quantity) in positions
+	difference = today's price - yesterday's price
+	change in margin account = difference * quantity
+	
+	if margin account value - change in margin account >= maintenence margin
+		margin account value -= change in margin account
+	else ## margin account value - change in margin account < maintenence margin ##
+		shortfall = maintenence margin - (margin account value - change in margin account)
+		if current capital > shortfall
+			margin account value = maintenence margin
+			current capital -= shortfall
+		else
+			(maybe liquidate other positions if this has higher priority? Future.)
+			current capital += margin account value
+			delete position from positions
+			
+			
+            
+global margin_account_value
+global maintenence_margin
+global current_capital
+global positions
+
+positions_to_remove[]
+
+for position in positions:
+    last_price, current_price, quantity = position
+    difference = current_price - last_price
+    margin_account_change = difference * quantity
+    
+    if margin_account_value - margin_account_change >= maintenence_margin:
+        margin_account_value -= margin_account_change
+    else:
+        shortfall = maintenence_margin - (margin_account_value - margin_account_change)
+        if current_capital > shortfall:
+            margin_account_value = maintenence_margin
+            current_capital -= shortfall
+        else:
+            current_capital += margin_account_value
+            positions_to_remove.append(position)
+            
+for position in positions_to_remove:
+    positions.remove(position)
