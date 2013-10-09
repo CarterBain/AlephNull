@@ -38,7 +38,7 @@ from alephnull.sources.test_source import (
 )
 
 # For backwards compatibility
-from zipline.data.loader import (load_from_yahoo,
+from alephnull.data.loader import (load_from_yahoo,
                                  load_bars_from_yahoo)
 
 __all__ = ['load_from_yahoo', 'load_bars_from_yahoo']

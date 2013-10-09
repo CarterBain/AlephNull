@@ -63,9 +63,9 @@ import logbook
 import pandas as pd
 from pandas.tseries.tools import normalize_date
 
-import zipline.protocol as zp
-import zipline.finance.risk as risk
-import zipline.finance.trading as trading
+import alephnull.protocol as zp
+import alephnull.finance.risk as risk
+import alephnull.finance.trading as trading
 from . period import PerformancePeriod
 
 log = logbook.Logger('Performance')
