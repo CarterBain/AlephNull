@@ -252,7 +252,7 @@ must specify stocks or indexes"""
                 stock=stock,
                 start=start,
                 end=end)
-            cache_filepath = get_cache_filepath(cache_filename)
+            cache_filepath = get_cache_filepath(_colon_to_semicolon(cache_filename))
             if os.path.exists(cache_filepath):
                 stkd = pd.DataFrame.from_csv(cache_filepath)
             else:
@@ -268,6 +268,8 @@ must specify stocks or indexes"""
 
     return data
 
+def _colon_to_semicolon(text):
+    return text.replace(":", ";")
 
 def load_from_yahoo(indexes=None,
                     stocks=None,
