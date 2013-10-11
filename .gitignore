@@ -1,5 +1,9 @@
 .bundle
 db/*.sqlite3
+*.ipynb
+*.orig
+.idea/
+.
 log/*.log
 *.log
 tmp/**/*
