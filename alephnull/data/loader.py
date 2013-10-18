@@ -268,8 +268,10 @@ must specify stocks or indexes"""
 
     return data
 
+
 def _colon_to_semicolon(text):
     return text.replace(":", ";")
+
 
 def load_from_yahoo(indexes=None,
                     stocks=None,
