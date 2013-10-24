@@ -80,7 +80,7 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict, defaultdict
 
-import zipline.protocol as zp
+import alephnull.protocol as zp
 from . position import positiondict
 
 log = logbook.Logger('Performance')
@@ -267,6 +267,7 @@ class PerformancePeriod(object):
         return np.dot(self._position_amounts, self._position_last_sale_prices)
 
     def update_last_sale(self, event):
+
         is_trade = event.type == zp.DATASOURCE_TYPE.TRADE
         has_price = not np.isnan(event.price)
         # isnan check will keep the last price if its not present
