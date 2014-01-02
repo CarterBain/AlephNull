@@ -24,20 +24,20 @@ from itertools import groupby, ifilter
 from operator import attrgetter
 
 from alephnull.errors import (
-	UnsupportedSlippageModel,
-	OverrideSlippagePostInit,
-	UnsupportedCommissionModel,
-	OverrideCommissionPostInit
-	)
+UnsupportedSlippageModel,
+OverrideSlippagePostInit,
+UnsupportedCommissionModel,
+OverrideCommissionPostInit
+)
 from alephnull.finance.performance import PerformanceTracker
 from alephnull.sources import DataFrameSource, DataPanelSource
 from alephnull.utils.factory import create_simulation_parameters
 from alephnull.transforms.utils import StatefulTransform
 from alephnull.finance.slippage import (
-	VolumeShareSlippage,
-	SlippageModel,
-	transact_partial
-	)
+VolumeShareSlippage,
+SlippageModel,
+transact_partial
+)
 from alephnull.finance.commission import PerShare, PerTrade
 from alephnull.finance.blotter import Blotter
 from alephnull.finance.constants import ANNUALIZER
@@ -46,10 +46,10 @@ import alephnull.protocol
 from alephnull.protocol import Event
 
 from alephnull.gens.composites import (
-	date_sorted_sources,
-	sequential_transforms,
-	alias_dt
-	)
+date_sorted_sources,
+sequential_transforms,
+alias_dt
+)
 from alephnull.gens.tradesimulation import AlgorithmSimulator
 
 DEFAULT_CAPITAL_BASE = float("1.0e5")
@@ -90,8 +90,8 @@ class TradingAlgorithm(object):
                If not provided, will extract from data_frequency.
             capital_base : float <default: 1.0e5>
                How much capital to start with.
-            leverage_restrictions : list <default [1.5, .5]>
-               Capital multiplier [long, short], defaults to [1, 1]
+            leverage_restrictions : list <default [1, 1]>
+               Capital multiplier [long, short],
                Regulation T margin restrictions are [1.5, .5]
         """
 		self._portfolio = None
