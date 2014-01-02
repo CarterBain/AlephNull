@@ -37,7 +37,7 @@ if __name__ == '__main__':
 	end = datetime(2013, 12, 31, 0, 0, 0, 0, pytz.utc)
 	data = load_from_yahoo(stocks=['SSYS'], start=start, end=end)
 
-	simple_algo = BuyStratasys()
+	simple_algo = BuyStratasys(leverage_restrictions=[200, 1])
 	results = simple_algo.run(data)
 	results.portfolio_value.plot()
 

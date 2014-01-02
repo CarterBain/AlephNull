@@ -26,10 +26,10 @@ import alephnull.errors
 import alephnull.protocol as zp
 
 from alephnull.finance.slippage import (
-	VolumeShareSlippage,
-	transact_partial,
-	check_order_triggers
-	)
+VolumeShareSlippage,
+transact_partial,
+check_order_triggers
+)
 from alephnull.finance.commission import PerShare
 import alephnull.utils.math_utils as zp_math
 
@@ -56,7 +56,7 @@ def round_for_minimum_price_variation(x, is_buy, diff=(0.0095 - .005)):
 
 
 class Blotter(object):
-	def __init__(self):
+	def __init__(self, leverage_multiples):
 		self.transact = transact_partial(VolumeShareSlippage(), PerShare())
 		# these orders are aggregated by sid
 		self.open_orders = defaultdict(list)
@@ -67,7 +67,7 @@ class Blotter(object):
 		self.new_orders = []
 		self.current_dt = None
 		self.max_shares = int(1e+11)
-		self.leverage = {1.0: 1.5, -1.0: .5}
+		self.leverage = dict(zip([1.0, -1], leverage_multiples))
 
 	def __repr__(self):
 		return """
@@ -221,10 +221,13 @@ class Blotter(object):
 				yield txn, order
 				continue
 
-			# this enforces regulation T leverage restrictions for a equity position
+			# this enforces leverage restrictions for a equity position
 			# however it provides no method for enforcing a margin call on an existing position
-			if abs(order.amount * txn.price) > self.account.starting_cash * self.leverage[order.direction]:
-				print ('insufficient funds')
+			if abs(txn.amount * txn.price) > self.account.starting_cash * self.leverage[order.direction]:
+				capitalerror = 'requested to transact ${} of {}, with ${} available'
+				log.warn(capitalerror.format(order.amount * txn.price, order.sid,
+				                             max(self.account.starting_cash, 0) *
+				                             self.leverage[order.direction]))
 				self.cancel(order.id)
 				txn.amount = 0
 				txn.commission = 0
