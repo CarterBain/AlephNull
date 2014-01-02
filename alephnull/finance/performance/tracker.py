@@ -170,7 +170,7 @@ class PerformanceTracker(object):
         self.txn_count = 0
         self.event_count = 0
 		
-		self.futures_cumulative_performance = FuturesPerformancePeriod(
+        self.futures_cumulative_performance = FuturesPerformancePeriod(
              # initial cash is your capital base.
             self.capital_base,
             # the cumulative period will be calculated over the entire test.

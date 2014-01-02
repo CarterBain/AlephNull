@@ -28,7 +28,6 @@ from . loader_utils import (
     source_to_records,
     Mapping
 )
-from alephnull.protocol import DailyReturn
 
 DailyReturn = collections.namedtuple('DailyReturn', ['date', 'returns'])
 

@@ -29,11 +29,8 @@ import pytz
 from . import benchmarks
 from . benchmarks import get_benchmark_returns
 
-from alephnull.protocol import DailyReturn
 from alephnull.utils.date_utils import tuple_to_date
-from alephnull.utils.tradingcalendar import trading_days
 from operator import attrgetter
-from alephnull.protocol import DailyReturn
 from alephnull.utils.tradingcalendar import (
     trading_day,
     trading_days
