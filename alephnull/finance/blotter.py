@@ -26,10 +26,10 @@ import alephnull.errors
 import alephnull.protocol as zp
 
 from alephnull.finance.slippage import (
-VolumeShareSlippage,
-transact_partial,
-check_order_triggers
-)
+	VolumeShareSlippage,
+	transact_partial,
+	check_order_triggers
+	)
 from alephnull.finance.commission import PerShare
 import alephnull.utils.math_utils as zp_math
 
@@ -223,7 +223,7 @@ class Blotter(object):
 
 			# this enforces leverage restrictions for a equity position
 			# however it provides no method for enforcing a margin call on an existing position
-			if abs(txn.amount * txn.price) > self.account.starting_cash * self.leverage[order.direction]:
+			if abs(order.amount * txn.price) > self.account.starting_cash * self.leverage[order.direction]:
 				capitalerror = 'requested to transact ${} of {}, with ${} available'
 				log.warn(capitalerror.format(order.amount * txn.price, order.sid,
 				                             max(self.account.starting_cash, 0) *
@@ -239,9 +239,9 @@ class Blotter(object):
 			# if txn.amount == 0:
 			#     raise alephnull.errors.TransactionWithNoAmount(txn=txn)
 
-			if math.copysign(1, txn.amount) != order.direction:
-				raise alephnull.errors.TransactionWithWrongDirection(
-					txn=txn, order=order)
+			# if math.copysign(1, txn.amount) != order.direction:
+			# 	raise alephnull.errors.TransactionWithWrongDirection(
+			# 		txn=txn, order=order)
 			if abs(txn.amount) > abs(self.orders[txn.order_id].amount):
 				raise alephnull.errors.TransactionVolumeExceedsOrder(
 					txn=txn, order=order)
