@@ -1,0 +1,32 @@
+What it would theoretically look like:
+
+instead of:
+data :: DataFrame = load_from_yahoo(stocks=[SYMBOL], indexes={}, start=start,
+                           end=end)
+
+we would do this:
+data :: DataFrame = load_from_ib(contracts=[YGZ14, ESM15], indexes={}, start=start, end=end)
+
+
+Would have a dataframe somehow structured like so (may be lazy):
+
+==============================================================================
+=================================== Price = Open Interest = Volume ===========
+                       =    = N16 = 100.2 =      400      =   20   ===========
+   Jul 2007 18:46:47   = YG = M17 = 140.2 =      300      =   30   ===========
+                       =    = S15 = 160.2 =      100      =   25   ===========
+==============================================================================
+                       =    = N16 = 100.2 =      400      =   20   ===========
+   Jul 2007 18:46:47   = NE = M17 = 140.2 =      300      =   30   ===========
+                       =    = S15 = 160.2 =      100      =   25   ===========
+==============================================================================
+
+hairbrained_strategy = HairbrainedAlgorithm()
+results = hairbrained_strategy.run(data)
+
+To test how this might work, I need some dummy data (I'll hardcode it or something - the interface in real life will be different anyway) and a simple futures trading algorithm.
+
+NEEDS TO TAKE INTO ACCOUNT:
+
+Costs of transferring contracts when one expires (rollover? Is that the word?)
+Margin requirements (cancelling if you can't make maintenance margin, )
