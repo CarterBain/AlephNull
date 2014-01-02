@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import matplotlib.pyplot as plt
+import pandas as pd
 from datetime import datetime
 import pytz
 
@@ -22,24 +23,21 @@ from alephnull.algorithm import TradingAlgorithm
 from alephnull.utils.factory import load_from_yahoo
 
 
-class BuyApple(TradingAlgorithm):  # inherit from TradingAlgorithm
-    """This is the simplest possible algorithm that does nothing but
-    buy 1 apple share on each event.
-    """
-    def handle_data(self, data):  # overload handle_data() method
-        self.order('AAPL', 1)  # order SID (=0) and amount (=1 shares)
+class BuyStratasys(TradingAlgorithm):  # inherit from TradingAlgorithm
+	"""This is the simplest possible algorithm that does nothing but
+	buy 1 apple share on each event.
+	"""
+
+	def handle_data(self, data):  # overload handle_data() method
+		self.order('SSYS', 100)
 
 
 if __name__ == '__main__':
-    start = datetime(2008, 1, 1, 0, 0, 0, 0, pytz.utc)
-    end = datetime(2010, 1, 1, 0, 0, 0, 0, pytz.utc)
-    data = load_from_yahoo(stocks=['AAPL'], indexes={}, start=start,
-                           end=end)
-    simple_algo = BuyApple()
-    results = simple_algo.run(data)
+	start = datetime(2013, 10, 1, 0, 0, 0, 0, pytz.utc)
+	end = datetime(2013, 12, 31, 0, 0, 0, 0, pytz.utc)
+	data = load_from_yahoo(stocks=['SSYS'], start=start, end=end)
 
-    ax1 = plt.subplot(211)
-    results.portfolio_value.plot(ax=ax1)
-    ax2 = plt.subplot(212, sharex=ax1)
-    data.AAPL.plot(ax=ax2)
-    plt.gcf().set_size_inches(18, 8)
+	simple_algo = BuyStratasys()
+	results = simple_algo.run(data)
+	results.portfolio_value.plot()
+
