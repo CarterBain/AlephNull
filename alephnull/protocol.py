@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import datetime
 
 from . utils.protocol_utils import Enum
 
@@ -68,9 +67,17 @@ class Order(Event):
 
 class Portfolio(object):
 
-    def __init__(self, initial_values=None):
-        if initial_values:
-            self.__dict__ = initial_values
+    def __init__(self):
+        self.capital_used = 0.0
+        self.starting_cash = 0.0
+        self.portfolio_value = 0.0
+        self.pnl = 0.0
+        self.returns = 0.0
+        self.cash = 0.0
+        self.positions = Positions()
+        self.start_date = None
+        self.positions_value = 0.0
+        self.portfolio_value = 0.0
 
     def __getitem__(self, key):
         return self.__dict__[key]
@@ -165,38 +172,32 @@ class BarData(object):
 
     def __iter__(self):
         for sid, data in self._data.iteritems():
-            if len(data):
-                yield sid
-
-    def keys(self):
-        return self._data.keys()
+            # Allow contains override to filter out sids.
+            if sid in self:
+                if len(data):
+                    yield sid
 
     def iterkeys(self):
-        return self._data.iterkeys()
+        # Allow contains override to filter out sids.
+        return (sid for sid in self._data.iterkeys() if sid in self)
+
+    def keys(self):
+        # Allow contains override to filter out sids.
+        return list(self.iterkeys())
 
     def itervalues(self):
-        return self._data.itervalues()
+        return (value for sid, value in self.iteritems())
+
+    def values(self):
+        return list(self.itervalues())
 
     def iteritems(self):
-        return self._data.iteritems()
+        return ((sid, value) for sid, value
+                in self._data.iteritems()
+                if sid in self)
 
     def items(self):
-        return self._data.items()
+        return list(self.iteritems())
 
-
-class DailyReturn(object):
-
-    def __init__(self, date, returns):
-
-        assert isinstance(date, datetime.datetime)
-        self.date = date.replace(hour=0, minute=0, second=0, microsecond=0)
-        self.returns = returns
-
-    def to_dict(self):
-        return {
-            'dt': self.date,
-            'returns': self.returns
-        }
-
-    def __repr__(self):
-        return str(self.date) + " - " + str(self.returns)
+    def __len__(self):
+        return len(self.keys())

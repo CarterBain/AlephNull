@@ -13,25 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
+
 import logbook
 import math
 import numpy as np
 import numpy.linalg as la
 
-import alephnull.finance.trading as trading
+from alephnull.finance import trading
 
 import pandas as pd
 
+import risk
 from . risk import (
     alpha,
     check_entry,
-    choose_treasury,
     information_ratio,
     sharpe_ratio,
     sortino_ratio,
 )
 
 log = logbook.Logger('Risk Period')
+
+choose_treasury = functools.partial(risk.choose_treasury,
+                                    risk.select_treasury_duration)
 
 
 class RiskMetricsPeriod(object):
@@ -53,11 +58,9 @@ class RiskMetricsPeriod(object):
         self.end_date = end_date
 
         if benchmark_returns is None:
-            benchmark_returns = [
-                x for x in trading.environment.benchmark_returns
-                if x.date >= returns[0].date and
-                x.date <= returns[-1].date
-            ]
+            br = trading.environment.benchmark_returns
+            benchmark_returns = br[(br.index >= returns.index[0]) &
+                                   (br.index <= returns.index[-1])]
 
         self.algorithm_returns = self.mask_returns_to_period(returns)
         self.benchmark_returns = self.mask_returns_to_period(benchmark_returns)

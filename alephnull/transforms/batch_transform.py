@@ -29,11 +29,61 @@ import pandas as pd
 from alephnull.utils.data import RollingPanel
 from alephnull.protocol import Event
 
-import alephnull.finance.trading as trading
+from alephnull.finance import trading
 
 from . utils import check_window_length
 
 log = logbook.Logger('BatchTransform')
+func_map = {'open_price': 'first',
+            'close_price': 'last',
+            'low': 'min',
+            'high': 'max',
+            'volume': 'sum'
+            }
+
+
+def get_sample_func(item):
+    if item in func_map:
+        return func_map[item]
+    else:
+        return 'last'
+
+
+def downsample_panel(minute_rp, daily_rp, mkt_close):
+    """
+    @minute_rp is a rolling panel, which should have minutely rows
+    @daily_rp is a rolling panel, which should have daily rows
+    @dt is the timestamp to use when adding a frame to daily_rp
+
+    Using the history in minute_rp, a new daily bar is created by
+    downsampling. The data from the daily bar is then added to the
+    daily rolling panel using add_frame.
+    """
+
+    cur_panel = minute_rp.get_current()
+    sids = minute_rp.minor_axis
+    day_frame = pd.DataFrame(columns=sids, index=cur_panel.items)
+    dt1 = trading.environment.normalize_date(mkt_close)
+    dt2 = trading.environment.next_trading_day(mkt_close)
+    by_close = functools.partial(get_date, mkt_close, dt1, dt2)
+    for item in minute_rp.items:
+        frame = cur_panel[item]
+        func = get_sample_func(item)
+        # group by trading day, using the market close of the current
+        # day. If events occurred after the last close (yesterday) but
+        # before today's close, group them into today.
+        dframe = frame.groupby(lambda d: by_close(d)).agg(func)
+        for stock in sids:
+            day_frame[stock][item] = dframe[stock].ix[dt1]
+    # store the frame at midnight instead of the close
+    daily_rp.add_frame(dt1, day_frame)
+
+
+def get_date(mkt_close, d1, d2, d):
+    if d > mkt_close:
+        return d2
+    else:
+        return d1
 
 
 class BatchTransform(object):
@@ -83,7 +133,8 @@ class BatchTransform(object):
                  sids=None,
                  fields=None,
                  compute_only_full=True,
-                 bars='daily'):
+                 bars='daily',
+                 downsample=False):
 
         """Instantiate new batch_transform object.
 
@@ -109,6 +160,8 @@ class BatchTransform(object):
             compute_only_full : bool <default=True>
                 Only call the user-defined function once the window is
                 full. Returns None if window is not full yet.
+            downsample : bool <default=False>
+                If true, downsample bars to daily bars. Otherwise, do nothing.
         """
         if func is not None:
             self.compute_transform_value = func
@@ -117,6 +170,8 @@ class BatchTransform(object):
 
         self.clean_nans = clean_nans
         self.compute_only_full = compute_only_full
+        # no need to down sample if the bars are already daily
+        self.downsample = downsample and (bars == 'minute')
 
         # How many bars are in a day
         self.bars = bars
@@ -168,13 +223,14 @@ class BatchTransform(object):
         self.supplemental_data = None
 
         self.rolling_panel = None
+        self.daily_rolling_panel = None
 
     def handle_data(self, data, *args, **kwargs):
         """
         Point of entry. Process an event frame.
         """
         # extract dates
-        dts = [event.datetime for event in data.itervalues()]
+        dts = [event.datetime for event in data._data.itervalues()]
         # we have to provide the event with a dt. This is only for
         # checking if the event is outside the window or not so a
         # couple of seconds shouldn't matter. We don't add it to
@@ -182,7 +238,7 @@ class BatchTransform(object):
         # sid keys.
         event = Event()
         event.dt = max(dts)
-        event.data = {k: v.__dict__ for k, v in data.iteritems()
+        event.data = {k: v.__dict__ for k, v in data._data.iteritems()
                       # Need to check if data has a 'length' to filter
                       # out sids without trade data available.
                       # TODO: expose more of 'no trade available'
@@ -201,6 +257,18 @@ class BatchTransform(object):
         # return newly computed or cached value
         return self.get_transform_value(*args, **kwargs)
 
+    def _init_panels(self, sids):
+        if self.downsample:
+            self.rolling_panel = RollingPanel(self.bars_in_day,
+                                              self.field_names, sids)
+
+            self.daily_rolling_panel = RollingPanel(self.window_length,
+                                                    self.field_names, sids)
+        else:
+            self.rolling_panel = RollingPanel(self.window_length *
+                                              self.bars_in_day,
+                                              self.field_names, sids)
+
     def _append_to_window(self, event):
         self.field_names = self._get_field_names(event)
 
@@ -209,11 +277,17 @@ class BatchTransform(object):
         else:
             sids = self.static_sids
 
+        # the panel sent to the transform code will have
+        # columns masked with this set of sids. This is how
+        # we guarantee that all (and only) the sids sent to the
+        # algorithm's handle_data and passed to the batch
+        # transform. See the get_data method to see it applied.
+        # N.B. that the underlying panel grows monotonically
+        # if the set of sids changes over time.
+        self.latest_sids = sids
         # Create rolling panel if not existant
         if self.rolling_panel is None:
-            self.rolling_panel = RollingPanel(self.window_length *
-                                              self.bars_in_day,
-                                              self.field_names, sids)
+            self._init_panels(sids)
 
         # Store event in rolling frame
         self.rolling_panel.add_frame(event.dt,
@@ -222,12 +296,22 @@ class BatchTransform(object):
                                                   columns=sids))
 
         # update trading day counters
-        _, mkt_close = trading.environment.get_open_and_close(event.dt)
-        if self.bars == 'daily':
-            # Daily bars have their dt set to midnight.
-            mkt_close = mkt_close.replace(hour=0, minute=0, second=0)
-        if event.dt >= mkt_close:
-            self.trading_days_total += 1
+        # we may get events from non-trading sources which occurr on
+        # non-trading days. The book-keeping for market close and
+        # trading day counting should only consider trading days.
+        if trading.environment.is_trading_day(event.dt):
+            _, mkt_close = trading.environment.get_open_and_close(event.dt)
+            if self.bars == 'daily':
+                # Daily bars have their dt set to midnight.
+                mkt_close = trading.environment.normalize_date(mkt_close)
+            if event.dt == mkt_close:
+                if self.downsample:
+                    downsample_panel(self.rolling_panel,
+                                     self.daily_rolling_panel,
+                                     mkt_close
+                                     )
+                self.trading_days_total += 1
+            self.mkt_close = mkt_close
 
         self.last_dt = event.dt
 
@@ -257,8 +341,13 @@ class BatchTransform(object):
                 self.trading_days_total % self.refresh_period == 0)
         # 2. Have the args or kwargs been changed since last time?
         args_updated = args != self.last_args or kwargs != self.last_kwargs
-        recalculate_needed = args_updated or (period_signals_update and
-                                              self.updated)
+        # 3. Is this a downsampled batch, and is the last event mkt close?
+        downsample_ready = not self.downsample or \
+            self.last_dt == self.mkt_close
+
+        recalculate_needed = downsample_ready and \
+            (args_updated or (period_signals_update and self.updated))
+        ###################################################
 
         if recalculate_needed:
             self.cached = self.compute_transform_value(
@@ -281,7 +370,10 @@ class BatchTransform(object):
         major axis/rows : dt
         minor axis/colums : sid
         """
-        data = self.rolling_panel.get_current()
+        if self.downsample:
+            data = self.daily_rolling_panel.get_current()
+        else:
+            data = self.rolling_panel.get_current()
 
         if self.supplemental_data:
             for item in data.items:
@@ -300,6 +392,8 @@ class BatchTransform(object):
                             supplemental_for_dt.combine_first(
                                 data[item].ix[dt])
 
+        # screen out sids no longer in the multiverse
+        data = data.ix[:, :, self.latest_sids]
         if self.clean_nans:
             # Fills in gaps of missing data during transform
             # of multiple stocks. E.g. we may be missing

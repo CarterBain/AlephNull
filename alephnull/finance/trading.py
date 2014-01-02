@@ -14,15 +14,19 @@
 # limitations under the License.
 
 import bisect
-import pytz
 import logbook
 import datetime
 
-from delorean import Delorean
 import pandas as pd
 
+from zipline.data.loader import load_market_data
+from zipline.utils.tradingcalendar import get_early_closes
 from alephnull.data.loader import load_market_data
+from alephnull.utils import tradingcalendar
 from alephnull.utils.tradingcalendar import get_early_closes
+from zipline.data.loader import load_market_data
+from zipline.utils import tradingcalendar
+from zipline.utils.tradingcalendar import get_early_closes
 
 
 log = logbook.Logger('Trading')
@@ -46,7 +50,7 @@ log = logbook.Logger('Trading')
 # subsequently referenced directly by zipline financial
 # components. To set the environment, you can set the property on
 # the module directly:
-#       import zipline.finance.trading as trading
+#       from zipline.finance import trading
 #       trading.environment = TradingEnvironment()
 #
 # or if you want to switch the environment for a limited context
@@ -93,17 +97,13 @@ class TradingEnvironment(object):
         self.early_close_trading_day = datetime.timedelta(hours=3, minutes=30)
         self.exchange_tz = exchange_tz
 
-        bm = None
+        bi = self.benchmark_returns.index
+        if max_date:
+            self.trading_days = bi[bi <= max_date].copy()
+        else:
+            self.trading_days = bi.copy()
 
-        trading_days_list = []
-        for bm in self.benchmark_returns:
-            if max_date and bm.date > max_date:
-                break
-            trading_days_list.append(bm.date)
-
-        self.trading_days = pd.DatetimeIndex(trading_days_list)
-
-        if bm and extra_dates:
+        if len(self.benchmark_returns) and extra_dates:
             for extra_date in extra_dates:
                 extra_date = extra_date.replace(hour=0, minute=0, second=0,
                                                 microsecond=0)
@@ -116,6 +116,9 @@ class TradingEnvironment(object):
 
         self.early_closes = get_early_closes(self.first_trading_day,
                                              self.last_trading_day)
+
+        self.open_and_closes = tradingcalendar.open_and_closes.ix[
+            self.trading_days]
 
     def __enter__(self, *args, **kwargs):
         global environment
@@ -133,20 +136,14 @@ class TradingEnvironment(object):
         return False
 
     def normalize_date(self, test_date):
-        return datetime.datetime(
-            year=test_date.year,
-            month=test_date.month,
-            day=test_date.day,
-            tzinfo=pytz.utc
-        )
+        test_date = pd.Timestamp(test_date, tz='UTC')
+        return pd.tseries.tools.normalize_date(test_date)
 
     def utc_dt_in_exchange(self, dt):
-        delorean = Delorean(dt, pytz.utc.zone)
-        return delorean.shift(self.exchange_tz).datetime
+        return pd.Timestamp(dt).tz_convert(self.exchange_tz)
 
     def exchange_dt_in_utc(self, dt):
-        delorean = Delorean(dt, self.exchange_tz)
-        return delorean.shift(pytz.utc.zone).datetime
+        return pd.Timestamp(dt, tz=self.exchange_tz).tz_convert('UTC')
 
     def is_market_hours(self, test_date):
         if not self.is_trading_day(test_date):
@@ -170,6 +167,11 @@ class TradingEnvironment(object):
 
         return None
 
+    def days_in_range(self, start, end):
+        mask = ((self.trading_days >= start) &
+                (self.trading_days <= end))
+        return self.trading_days[mask]
+
     def next_open_and_close(self, start_date):
         """
         Given the start_date, returns the next open and close of
@@ -184,35 +186,14 @@ Last successful date: %s" % self.last_trading_day)
 
         return self.get_open_and_close(next_open)
 
-    def get_open_and_close(self, next_open):
+    def get_open_and_close(self, day):
+        todays_minutes = self.open_and_closes.ix[day.date()]
 
-        # creating a naive datetime with the correct hour,
-        # minute, and date. this will allow us to use Delorean to
-        # shift the time between EST and UTC.
-        next_open = next_open.replace(
-            hour=9,
-            minute=31,
-            second=0,
-            microsecond=0,
-            tzinfo=None
-        )
-        # create a new Delorean with the next_open naive date and
-        # the correct timezone for the exchange.
-        open_utc = self.exchange_dt_in_utc(next_open)
+        return todays_minutes['market_open'], todays_minutes['market_close']
 
-        market_open = open_utc
-        market_close = (market_open
-                        + self.get_trading_day_duration(open_utc)
-                        - datetime.timedelta(minutes=1))
-
-        return market_open, market_close
-
-    def get_trading_day_duration(self, trading_day):
-        trading_day = self.normalize_date(trading_day)
-        if trading_day in self.early_closes:
-            return self.early_close_trading_day
-
-        return self.full_trading_day
+    def market_minutes_for_day(self, midnight):
+        market_open, market_close = self.get_open_and_close(midnight)
+        return pd.date_range(market_open, market_close, freq='T')
 
     def trading_day_distance(self, first_date, second_date):
         first_date = self.normalize_date(first_date)
@@ -314,6 +295,7 @@ class SimulationParameters(object):
     period_start={period_start},
     period_end={period_end},
     capital_base={capital_base},
+    data_frequency={data_frequency},
     emission_rate={emission_rate},
     first_open={first_open},
     last_close={last_close})\
@@ -321,6 +303,7 @@ class SimulationParameters(object):
            period_start=self.period_start,
            period_end=self.period_end,
            capital_base=self.capital_base,
+           data_frequency=self.data_frequency,
            emission_rate=self.emission_rate,
            first_open=self.first_open,
            last_close=self.last_close)

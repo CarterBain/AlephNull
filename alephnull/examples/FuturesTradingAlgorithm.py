@@ -17,11 +17,14 @@
 import matplotlib.pyplot as plt
 from datetime import datetime
 import pytz
+import random
 
 from alephnull.algorithm import TradingAlgorithm
 from alephnull.utils.factory import load_from_yahoo
 
+from collections import OrderedDict
 from pandas.core.series import TimeSeries
+
 
 class FuturesTradingAlgorithm(TradingAlgorithm):
     """A wrapper around TradingAlgorithm that adds calculations for futures contracts.
@@ -47,10 +50,11 @@ class FuturesTradingAlgorithm(TradingAlgorithm):
             measures.__dict__.update({'maintenance_margin': maintenance_margin})
 
     def initialize(self, *args, **kwargs):
-        self.margin_account_log = TimeSeries()
+        self._margin_account_log = OrderedDict()
         self.margin_account_value = 100000
         self.last_prices = {}
         self.initialize_futures(*args, **kwargs)
+        # self.max_leverage = 1.5
 
     def handle_data(self, data):
 
@@ -69,7 +73,7 @@ class FuturesTradingAlgorithm(TradingAlgorithm):
 
         timestamp = next(data[0].iteritems() if type(data) is list else data.iteritems())[1]['datetime']
 
-        self.margin_account_log = self.margin_account_log.set_value(timestamp, self.margin_account_value)
+        self._margin_account_log[timestamp] = self.margin_account_value
 
         if self.margin_account_value < self.total_maintenance_margin:
             self._handle_margin_call()
@@ -83,8 +87,6 @@ class FuturesTradingAlgorithm(TradingAlgorithm):
         else:
             # there shouldn't be an exception here, right?
             # TODO: log once you figure out how zipline's logging works
-            timestamp = next(data[0].iteritems() if type(data) is list else data.iteritems())[1]['datetime']
-            print("You can't handle the truth! " + timestamp)
             pass
 
     def handle_futures_data(self):
@@ -95,29 +97,26 @@ class FuturesTradingAlgorithm(TradingAlgorithm):
         """Up to subclasses to implement"""
         pass
 
-    def _handle_margin_call(self, data):
+    def _handle_margin_call(self):
         """Up to subclasses to implement, though this class does provide a few premade procedures
-        like _liquidate_excess_on_margin_call"""
+        like _liquidate_random_positions"""
         pass
 
-    def _liquidate_excess_on_margin_call(self, data):
-        """ A sample procedure for what to do on a margin call.
-        This gets the first position among the ones owned and liquidates
-        enough (putting the proceeds into the margin account) to put you back
-        above initial margin for all your contracts.
+    def _liquidate_random_positions(self):
+        """Liquidate an entire position (the position in particular is chosen at random) until we are back above
+        maintenance margin."""
+        while self.margin_account_value < self.total_maintenance_margin:
+            positions_as_list = self.perf_tracker.cumulative_performance.positions.items()[:]
+            chosen_symbol, chosen_position = positions_as_list[random.randint(0, len(positions_as_list) - 1)]
+            TradingAlgorithm.order(self, chosen_symbol, chosen_position.amount)
+            positions_as_list.remove((chosen_symbol, chosen_position))
 
-        TODO: Distribute over all positions
-        """
-        symbol, measures = next(data.iteritems())
-        position = self.perf_tracker.cumulative_performance.positions[symbol]
-        maintenance_margin = measures['maintenance_margin']
-        quantity_owned = position.amount
-        margin = position.margin
-        initial_margin = measures['initial_margin']
-        if maintenance_margin * quantity_owned > margin:
-            # sell enough so that your margin account is back above initial margin for every contract
-            quantity_to_sell = int(initial_margin * quantity_owned ** 2 / margin - quantity_owned) + 1
-            TradingAlgorithm.order(self, symbol, -1 * quantity_to_sell)
+            self.total_maintenance_margin = sum(
+                [position.last_sale_price * 0.32 * position.amount for symbol, position in positions_as_list])
+
+    @property
+    def margin_account_log(self):
+        return TimeSeries(self._margin_account_log)
 
 
 class BuyGoogleAsFuture(FuturesTradingAlgorithm):
@@ -127,6 +126,9 @@ class BuyGoogleAsFuture(FuturesTradingAlgorithm):
 
     def handle_futures_data(self, data):
         self.order("GOOG", 1, initial_margin=data['GOOG']['initial_margin'])
+
+    def _handle_margin_call(self):
+        self._liquidate_random_positions()
 
 if __name__ == '__main__':
     start = datetime(2008, 1, 1, 0, 0, 0, 0, pytz.utc)
@@ -142,5 +144,8 @@ if __name__ == '__main__':
 
     futures_margin_series = TimeSeries(index=futures_indexes, data=futures_margin_data)
     futures_margin_series.plot(ax=ax1)
+
+    ax2 = plt.subplot(212, sharex=ax1)
+    data.GOOG.plot(ax=ax2)
 
     plt.gcf().set_size_inches(18, 8)

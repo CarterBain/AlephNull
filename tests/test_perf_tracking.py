@@ -15,6 +15,7 @@
 
 import collections
 import heapq
+import logging
 import operator
 
 import unittest
@@ -31,11 +32,13 @@ import zipline.utils.math_utils as zp_math
 from zipline.gens.composites import date_sorted_sources
 from zipline.finance.trading import SimulationParameters
 from zipline.finance.blotter import Order
-import zipline.finance.trading as trading
+from zipline.finance import trading
 from zipline.protocol import DATASOURCE_TYPE
 from zipline.utils.factory import create_random_simulation_parameters
 import zipline.protocol
 from zipline.protocol import Event
+
+logger = logging.getLogger('Test Perf Tracking')
 
 onesec = datetime.timedelta(seconds=1)
 oneday = datetime.timedelta(days=1)
@@ -49,14 +52,14 @@ def create_txn(event, price, amount):
 
 def benchmark_events_in_range(sim_params):
     return [
-        Event({'dt': ret.date,
-               'returns': ret.returns,
+        Event({'dt': dt,
+               'returns': ret,
                'type':
                zipline.protocol.DATASOURCE_TYPE.BENCHMARK,
                'source_id': 'benchmarks'})
-        for ret in trading.environment.benchmark_returns
-        if ret.date.date() >= sim_params.period_start.date()
-        and ret.date.date() <= sim_params.period_end.date()
+        for dt, ret in trading.environment.benchmark_returns.iterkv()
+        if dt.date() >= sim_params.period_start.date()
+        and dt.date() <= sim_params.period_end.date()
     ]
 
 
@@ -151,6 +154,9 @@ class TestCommissionEvents(unittest.TestCase):
         self.sim_params, self.dt, self.end_dt = \
             create_random_simulation_parameters()
 
+        logger.info("sim_params: %s, dt: %s, end_dt: %s" %
+                    (self.sim_params, self.dt, self.end_dt))
+
         self.sim_params.capital_base = 10e3
 
         self.benchmark_events = benchmark_events_in_range(self.sim_params)
@@ -165,7 +171,7 @@ class TestCommissionEvents(unittest.TestCase):
                 self.sim_params
             )
 
-            cash_adj_dt = self.sim_params.period_start \
+            cash_adj_dt = self.sim_params.first_open \
                 + datetime.timedelta(hours=3)
             cash_adjustment = factory.create_commission(1, 300.0,
                                                         cash_adj_dt)
@@ -195,7 +201,7 @@ class TestCommissionEvents(unittest.TestCase):
                 self.sim_params
             )
 
-            cash_adj_dt = self.sim_params.period_start \
+            cash_adj_dt = self.sim_params.first_open \
                 + datetime.timedelta(hours=3)
             cash_adjustment = factory.create_commission(1, 300.0,
                                                         cash_adj_dt)
@@ -225,7 +231,7 @@ class TestCommissionEvents(unittest.TestCase):
                 self.sim_params
             )
 
-            cash_adj_dt = self.sim_params.period_start \
+            cash_adj_dt = self.sim_params.first_open \
                 + datetime.timedelta(hours=3)
             cash_adjustment = factory.create_commission(1, 300.0,
                                                         cash_adj_dt)
@@ -1160,21 +1166,21 @@ class TestPerformanceTracker(unittest.TestCase):
             # create a transaction for all but
             # first trade in each sid, to simulate None transaction
             if event.dt != no_txn_dt:
-                order = Order(**{
-                    'sid': event.sid,
-                    'amount': -25,
-                    'dt': event.dt
-                })
+                order = Order(
+                    sid=event.sid,
+                    amount=-25,
+                    dt=event.dt
+                )
                 yield order
                 yield event
-                txn = Transaction(**{
-                    'sid': event.sid,
-                    'amount': -25,
-                    'dt': event.dt,
-                    'price': 10.0,
-                    'commission': 0.50,
-                    'order_id': order.id
-                })
+                txn = Transaction(
+                    sid=event.sid,
+                    amount=-25,
+                    dt=event.dt,
+                    price=10.0,
+                    commission=0.50,
+                    order_id=order.id
+                )
                 yield txn
             else:
                 yield event
@@ -1195,20 +1201,19 @@ class TestPerformanceTracker(unittest.TestCase):
             tracker = perf.PerformanceTracker(sim_params)
 
             foo_event_1 = factory.create_trade('foo', 10.0, 20, start_dt)
-            order_event_1 = Order(**{
-                                  'sid': foo_event_1.sid,
-                                  'amount': -25,
-                                  'dt': foo_event_1.dt
-                                  })
+            order_event_1 = Order(sid=foo_event_1.sid,
+                                  amount=-25,
+                                  dt=foo_event_1.dt)
             bar_event_1 = factory.create_trade('bar', 100.0, 200, start_dt)
             txn_event_1 = Transaction(sid=foo_event_1.sid,
                                       amount=-25,
                                       dt=foo_event_1.dt,
                                       price=10.0,
-                                      commission=0.50)
+                                      commission=0.50,
+                                      order_id=order_event_1.id)
             benchmark_event_1 = Event({
                 'dt': start_dt,
-                'returns': 1.0,
+                'returns': 0.01,
                 'type': DATASOURCE_TYPE.BENCHMARK
             })
 
@@ -1218,7 +1223,7 @@ class TestPerformanceTracker(unittest.TestCase):
                 'bar', 11.0, 20, start_dt + datetime.timedelta(minutes=1))
             benchmark_event_2 = Event({
                 'dt': start_dt + datetime.timedelta(minutes=1),
-                'returns': 2.0,
+                'returns': 0.02,
                 'type': DATASOURCE_TYPE.BENCHMARK
             })
 
@@ -1270,3 +1275,8 @@ class TestPerformanceTracker(unittest.TestCase):
                               msg_1['minute_perf']['period_close'])
             self.assertEquals(foo_event_2.dt,
                               msg_2['minute_perf']['period_close'])
+
+            # Ensure that a Sharpe value for cumulative metrics is being
+            # created.
+            self.assertIsNotNone(msg_1['cumulative_risk_metrics']['sharpe'])
+            self.assertIsNotNone(msg_2['cumulative_risk_metrics']['sharpe'])

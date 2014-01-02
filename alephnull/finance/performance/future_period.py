@@ -57,8 +57,6 @@ omitted).
     | max_capital\  | The maximum amount of capital deployed during the    |
     | _used         | period.                                              |
     +---------------+------------------------------------------------------+
-    | max_leverage  | The maximum leverage used during the period.         |
-    +---------------+------------------------------------------------------+
     | period_close  | The last close of the market in period. datetime in  |
     |               | pytz.utc timezone.                                   |
     +---------------+------------------------------------------------------+
@@ -74,7 +72,6 @@ omitted).
 
 from __future__ import division
 import logbook
-import math
 
 import numpy as np
 import pandas as pd
@@ -132,9 +129,6 @@ class PerformancePeriod(object):
         self.processed_transactions = defaultdict(list)
         self.orders_by_modified = defaultdict(OrderedDict)
         self.orders_by_id = OrderedDict()
-        self.cumulative_capital_used = 0.0
-        self.max_capital_used = 0.0
-        self.max_leverage = 0.0
 
     def ensure_position_index(self, sid):
         try:
@@ -198,7 +192,6 @@ class PerformancePeriod(object):
 
     def adjust_cash(self, amount):
         self.period_cash_flow += amount
-        self.cumulative_capital_used -= amount
 
     def calculate_performance(self):
         self.ending_value = self.calculate_positions_value()
@@ -226,6 +219,22 @@ class PerformancePeriod(object):
                 del self.orders_by_id[order.id]
             self.orders_by_id[order.id] = order
 
+    def update_position(self, sid, amount=None, last_sale_price=None,
+                        last_sale_date=None, cost_basis=None):
+        pos = self.positions[sid]
+        self.ensure_position_index(sid)
+
+        if amount is not None:
+            pos.amount = amount
+            self._position_amounts[sid] = amount
+        if last_sale_price is not None:
+            pos.last_sale_price = last_sale_price
+            self._position_last_sale_prices[sid] = last_sale_price
+        if last_sale_date is not None:
+            pos.last_sale_date = last_sale_date
+        if cost_basis is not None:
+            pos.cost_basis = cost_basis
+
     def execute_transaction(self, txn):
         # Update Position
         # ----------------
@@ -236,27 +245,6 @@ class PerformancePeriod(object):
 
         self.period_cash_flow -= txn.price * txn.amount
 
-        # Max Leverage
-        # ---------------
-        # Calculate the maximum capital used and maximum leverage
-        transaction_cost = txn.price * txn.amount
-        self.cumulative_capital_used += transaction_cost
-
-        if math.fabs(self.cumulative_capital_used) > self.max_capital_used:
-            self.max_capital_used = math.fabs(self.cumulative_capital_used)
-
-            # We want to conveye a level, rather than a precise figure.
-            # round to the nearest 5,000 to keep the number easy on the eyes
-            self.max_capital_used = self.round_to_nearest(
-                self.max_capital_used,
-                base=5000
-            )
-
-            # we're adding a 10% cushion to the capital used.
-            self.max_leverage = 1.1 * \
-                self.max_capital_used / self.starting_cash
-
-        # add transaction to the list of processed transactions
         if self.keep_transactions:
             self.processed_transactions[txn.dt].append(txn)
 
@@ -267,16 +255,16 @@ class PerformancePeriod(object):
         return np.dot(self._position_amounts, self._position_last_sale_prices)
 
     def update_last_sale(self, event):
+        if event.sid not in self.positions:
+            return
 
-        is_trade = event.type == zp.DATASOURCE_TYPE.TRADE
-        has_price = not np.isnan(event.price)
+        if event.type != zp.DATASOURCE_TYPE.TRADE:
+            return
+
+        if not pd.isnull(event.price):
         # isnan check will keep the last price if its not present
-        if (event.sid in self.positions) and is_trade and has_price:
-            self.positions[event.sid].last_sale_price = event.price
-            self.ensure_position_index(event.sid)
-            self._position_last_sale_prices[event.sid] = event.price
-
-            self.positions[event.sid].last_sale_date = event.dt
+            self.update_position(event.sid, last_sale_price=event.price,
+                                 last_sale_date=event.dt)
 
     def __core_dict(self):
         rval = {
@@ -288,9 +276,6 @@ class PerformancePeriod(object):
             'starting_cash': self.starting_cash,
             'ending_cash': self.ending_cash,
             'portfolio_value': self.ending_cash + self.ending_value,
-            'cumulative_capital_used': self.cumulative_capital_used,
-            'max_capital_used': self.max_capital_used,
-            'max_leverage': self.max_leverage,
             'pnl': self.pnl,
             'returns': self.returns,
             'period_open': self.period_open,
@@ -368,7 +353,6 @@ class PerformancePeriod(object):
         positions = self._positions_store
 
         for sid, pos in self.positions.iteritems():
-
             if sid not in positions:
                 positions[sid] = zp.Position(sid)
             position = positions[sid]
@@ -384,77 +368,3 @@ class PerformancePeriod(object):
             if pos.amount != 0:
                 positions.append(pos.to_dict())
         return positions
-
-
-class FuturesPerformancePeriod(object):
-    """We need to replicate:
-    * calculate_performance
-    * execute_transaction
-    * record_order
-    * update_last_sale
-    """
-    def __init__(
-            self,
-            starting_cash,
-            period_open=None,
-            period_close=None,
-            keep_transactions=True,
-            keep_orders=False,
-            serialize_positions=True):
-        self.backing_period = PerformancePeriod(starting_cash, period_open, period_close, keep_transactions,
-                                                keep_orders, serialize_positions)
-
-        self.margin_account_value = starting_cash
-        self.owned_positions = {}  # will have a format like {("GS", "N10"): {amount: 100, last_price: 0.25}
-        self.margin_history = {}  # format like {Timestamp(...): 400.30}
-
-        self.contract_multiplier = 100
-        self.maintenance_margin_rate = 0.20
-        self.initial_margin_rate = 0.30
-
-    def record_order(self, order):
-        # self.owned_positions[order.sid] = order.amount
-
-        self.backing_period.record_order(order)
-
-    def execute_transaction(self, txn):
-        contract_multiplier = 1000
-
-        margin_for_new_txn = txn.price * contract_multiplier * self.initial_margin_rate * txn.amount
-
-        if txn.sid in self.owned_positions:
-            self.recalculate_margin_from_price_change(txn.sid, txn.price)
-
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
-                self.owned_positions[txn.sid]['amount'] += txn.amount
-        else:  # buying the first units of a contract
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
-                self.owned_positions[txn.sid] = {'amount': txn.amount, 'last_price': txn.price}
-
-    def calculate_maintenance_margin(self):
-        """Uses the owned_positions dictionary to calculate the minimum a margin account must meet in order for
-        new transactions to take place."""
-
-        maintenance_margin = 0
-        for position in self.owned_positions.values():
-            maintenance_margin += self.contract_multiplier * position['last_price'] * \
-                                  self.maintenance_margin_rate * position['amount']
-        return maintenance_margin
-
-    def update_last_sale(self, event):
-        if event.sid in self.owned_positions:
-            self.recalculate_margin_from_price_change(event.sid, event.price)
-            self.margin_history[event.dt] = self.margin_account_value
-
-    def recalculate_margin_from_price_change(self, sid, new_price):
-        """Adjusts the margin account value to compensate with a change in price of an already-owned contract"""
-        contract_multiplier = 1000
-        last_price = self.owned_positions[sid]['last_price']
-        amount = self.owned_positions[sid]['amount']
-
-        delta = contract_multiplier * (new_price - last_price) * amount
-        self.margin_account_value += delta
-        self.owned_positions[sid]['last_price'] = new_price
-
-    def __getattr__(self, name):
-        return getattr(self.backing_period, name)

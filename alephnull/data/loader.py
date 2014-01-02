@@ -14,6 +14,7 @@
 # limitations under the License.
 
 
+import importlib
 import os
 from os.path import expanduser
 from collections import OrderedDict
@@ -25,7 +26,6 @@ import pandas as pd
 from pandas.io.data import DataReader
 import pytz
 
-from . treasuries import get_treasury_data
 from . import benchmarks
 from . benchmarks import get_benchmark_returns
 
@@ -34,7 +34,10 @@ from alephnull.utils.date_utils import tuple_to_date
 from alephnull.utils.tradingcalendar import trading_days
 from operator import attrgetter
 from alephnull.protocol import DailyReturn
-from alephnull.utils.tradingcalendar import trading_days
+from alephnull.utils.tradingcalendar import (
+    trading_day,
+    trading_days
+)
 
 logger = logbook.Logger('Loader')
 
@@ -50,6 +53,16 @@ CACHE_PATH = os.path.join(
     '.zipline',
     'cache'
 )
+
+#Mapping from index symbol to appropriate bond data
+INDEX_MAPPING = {
+    '^GSPC':
+    ('treasuries', 'treasury_curves.csv', 'data.treasury.gov'),
+    '^GSPTSE':
+    ('treasuries_can', 'treasury_curves_can.csv', 'bankofcanada.ca'),
+    '^FTSE':  # use US treasuries until UK bonds implemented
+    ('treasuries', 'treasury_curves.csv', 'data.treasury.gov'),
+}
 
 
 def get_datafile(name, mode='r'):
@@ -72,21 +85,27 @@ def get_cache_filepath(name):
     return os.path.join(CACHE_PATH, name)
 
 
-def dump_treasury_curves():
+def dump_treasury_curves(module='treasuries', filename='treasury_curves.csv'):
     """
     Dumps data to be used with zipline.
 
     Puts source treasury and data into zipline.
     """
+    try:
+        m = importlib.import_module("." + module, package='zipline.data')
+    except ImportError:
+        raise NotImplementedError(
+            'Treasury curve {0} module not implemented'.format(module))
+
     tr_data = {}
 
-    for curve in get_treasury_data():
+    for curve in m.get_treasury_data():
         # Not ideal but massaging data into expected format
         tr_data[curve['date']] = curve
 
     curves = pd.DataFrame(tr_data).T
 
-    datafile = get_datafile('treasury_curves.csv', mode='wb')
+    datafile = get_datafile(filename, mode='wb')
     curves.to_csv(datafile)
     datafile.close()
 
@@ -154,49 +173,65 @@ Fetching data from Yahoo Finance.
         fp_bm = get_datafile(get_benchmark_filename(bm_symbol), "rb")
 
     saved_benchmarks = pd.Series.from_csv(fp_bm)
+    saved_benchmarks = saved_benchmarks.tz_localize('UTC')
     fp_bm.close()
+
+    most_recent = pd.Timestamp('today', tz='UTC') - trading_day
+    most_recent_index = trading_days.searchsorted(most_recent)
+    days_up_to_now = trading_days[:most_recent_index + 1]
 
     # Find the offset of the last date for which we have trading data in our
     # list of valid trading days
     last_bm_date = saved_benchmarks.index[-1]
-    last_bm_date_offset = trading_days.searchsorted(
+    last_bm_date_offset = days_up_to_now.searchsorted(
         last_bm_date.strftime('%Y/%m/%d'))
 
     # If more than 1 trading days has elapsed since the last day where
     # we have data,then we need to update
-    if len(trading_days) - last_bm_date_offset > 1:
+    if len(days_up_to_now) - last_bm_date_offset > 1:
         benchmark_returns = update_benchmarks(bm_symbol, last_bm_date)
+        if (
+            benchmark_returns.index.tz is None
+            or
+            benchmark_returns.index.tz.zone != 'UTC'
+        ):
+            benchmark_returns = benchmark_returns.tz_localize('UTC')
     else:
         benchmark_returns = saved_benchmarks
-        benchmark_returns = benchmark_returns.tz_localize('UTC')
+        if (
+            benchmark_returns.index.tz is None
+            or
+            benchmark_returns.index.tz.zone != 'UTC'
+        ):
+            benchmark_returns = benchmark_returns.tz_localize('UTC')
 
-    bm_returns = []
-    for dt, returns in benchmark_returns.iterkv():
-        daily_return = DailyReturn(date=dt, returns=returns)
-        bm_returns.append(daily_return)
+    #Get treasury curve module, filename & source from mapping.
+    #Default to USA.
+    module, filename, source = INDEX_MAPPING.get(
+        bm_symbol, INDEX_MAPPING['^GSPC'])
 
     try:
-        fp_tr = get_datafile('treasury_curves.csv', "rb")
+        fp_tr = get_datafile(filename, "rb")
     except IOError:
         print("""
 data files aren't distributed with source.
-Fetching data from data.treasury.gov
-""").strip()
-        dump_treasury_curves()
-        fp_tr = get_datafile('treasury_curves.csv', "rb")
+Fetching data from {0}
+""").format(source).strip()
+        dump_treasury_curves(module, filename)
+        fp_tr = get_datafile(filename, "rb")
 
     saved_curves = pd.DataFrame.from_csv(fp_tr)
 
     # Find the offset of the last date for which we have trading data in our
     # list of valid trading days
     last_tr_date = saved_curves.index[-1]
-    last_tr_date_offset = trading_days.searchsorted(
+    last_tr_date_offset = days_up_to_now.searchsorted(
         last_tr_date.strftime('%Y/%m/%d'))
 
     # If more than 1 trading days has elapsed since the last day where
     # we have data,then we need to update
-    if len(trading_days) - last_tr_date_offset > 1:
-        treasury_curves = dump_treasury_curves()
+    if len(days_up_to_now) - last_tr_date_offset > 1:
+        treasury_curves = dump_treasury_curves(module, filename)
     else:
         treasury_curves = saved_curves.tz_localize('UTC')
 
@@ -209,10 +244,10 @@ Fetching data from data.treasury.gov
     fp_tr.close()
 
     tr_curves = OrderedDict(sorted(
-                            ((dt, c) for dt, c in tr_curves.iteritems()),
-                            key=lambda t: t[0]))
+        ((dt, c) for dt, c in tr_curves.iteritems()),
+        key=lambda t: t[0]))
 
-    return bm_returns, tr_curves
+    return benchmark_returns, tr_curves
 
 
 def _load_raw_yahoo_data(indexes=None, stocks=None, start=None, end=None):
@@ -251,7 +286,7 @@ must specify stocks or indexes"""
             cache_filename = "{stock}-{start}-{end}.csv".format(
                 stock=stock,
                 start=start,
-                end=end)
+                end=end).replace(':', '-')
             cache_filepath = get_cache_filepath(_colon_to_semicolon(cache_filename))
             if os.path.exists(cache_filepath):
                 stkd = pd.DataFrame.from_csv(cache_filepath)

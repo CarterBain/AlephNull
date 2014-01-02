@@ -29,7 +29,7 @@ from abc import ABCMeta, abstractmethod
 
 from alephnull.protocol import DATASOURCE_TYPE
 from alephnull.gens.utils import assert_sort_unframe_protocol, hash_args
-import alephnull.finance.trading as trading
+from alephnull.finance import trading
 
 log = logbook.Logger('Transform')
 
