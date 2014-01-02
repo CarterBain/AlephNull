@@ -19,23 +19,19 @@ Factory functions to prepare useful data.
 """
 import pytz
 import random
-from collections import OrderedDict
-from delorean import Delorean
 
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from alephnull.protocol import DailyReturn, Event, DATASOURCE_TYPE
+from alephnull.protocol import Event, DATASOURCE_TYPE
 from alephnull.sources import (SpecificEquityTrades,
                              DataFrameSource,
                              DataPanelSource)
 from alephnull.finance.trading import SimulationParameters
-import alephnull.finance.trading as trading
-from alephnull.sources.test_source import (
-    date_gen,
-    create_trade
-)
+from alephnull.finance import trading
+from alephnull.sources.test_source import create_trade
+
 
 # For backwards compatibility
 from alephnull.data.loader import (load_from_yahoo,
@@ -46,14 +42,14 @@ __all__ = ['load_from_yahoo', 'load_bars_from_yahoo']
 
 def create_simulation_parameters(year=2006, start=None, end=None,
                                  capital_base=float("1.0e5"),
-                                 num_days=None
+                                 num_days=None, load=None
                                  ):
     """Construct a complete environment with reasonable defaults"""
     if start is None:
         start = datetime(year, 1, 1, tzinfo=pytz.utc)
     if end is None:
         if num_days:
-            trading.environment = trading.TradingEnvironment()
+            trading.environment = trading.TradingEnvironment(load=load)
             start_index = trading.environment.trading_days.searchsorted(
                 start)
             end = trading.environment.trading_days[start_index + num_days - 1]
@@ -66,36 +62,6 @@ def create_simulation_parameters(year=2006, start=None, end=None,
     )
 
     return sim_params
-
-
-def create_noop_environment():
-    oneday = timedelta(days=1)
-    start = datetime(2006, 1, 1, tzinfo=pytz.utc)
-
-    bm_returns = []
-    tr_curves = OrderedDict()
-    for day in date_gen(start=start, delta=oneday, count=252):
-        dr = DailyReturn(day, 0.01)
-        bm_returns.append(dr)
-        curve = {
-            '10year': 0.0799,
-            '1month': 0.0799,
-            '1year': 0.0785,
-            '20year': 0.0765,
-            '2year': 0.0794,
-            '30year': 0.0804,
-            '3month': 0.0789,
-            '3year': 0.0796,
-            '5year': 0.0792,
-            '6month': 0.0794,
-            '7year': 0.0804,
-            'tid': 1752
-        }
-        tr_curves[day] = curve
-
-    load_nodata = lambda x: (bm_returns, tr_curves)
-
-    return trading.TradingEnvironment(load=load_nodata)
 
 
 def create_random_simulation_parameters():
@@ -130,19 +96,20 @@ check treasury and benchmark data in findb, and re-run the test."""
 
 
 def get_next_trading_dt(current, interval):
-    naive = current.replace(tzinfo=None)
-    delo = Delorean(naive, pytz.utc.zone)
-    ex_tz = trading.environment.exchange_tz
-    next_dt = delo.shift(ex_tz).datetime
+    next_dt = pd.Timestamp(current).tz_convert(trading.environment.exchange_tz)
 
     while True:
+        # Convert timestamp to naive before adding day, otherwise the when
+        # stepping over EDT an hour is added.
+        next_dt = pd.Timestamp(next_dt.replace(tzinfo=None))
         next_dt = next_dt + interval
-        next_delo = Delorean(next_dt.replace(tzinfo=None), ex_tz)
-        next_utc = next_delo.shift(pytz.utc.zone).datetime
-        if trading.environment.is_market_hours(next_utc):
+        next_dt = pd.Timestamp(next_dt, tz=trading.environment.exchange_tz)
+        next_dt_utc = next_dt.tz_convert('UTC')
+        if trading.environment.is_market_hours(next_dt_utc):
             break
+        next_dt = next_dt_utc.tz_convert(trading.environment.exchange_tz)
 
-    return next_utc
+    return next_dt_utc
 
 
 def create_trade_history(sid, prices, amounts, interval, sim_params,
@@ -223,31 +190,13 @@ def create_txn_history(sid, priceList, amtList, interval, sim_params):
 
 
 def create_returns_from_range(sim_params):
-    current = sim_params.first_open
-    end = sim_params.last_close
-    test_range = []
-    while current <= end:
-        r = DailyReturn(current, random.random())
-        test_range.append(r)
-        current = trading.environment.next_trading_day(current)
-
-    return test_range
+    return pd.Series(index=sim_params.trading_days,
+                     data=np.random.rand(len(sim_params.trading_days)))
 
 
 def create_returns_from_list(returns, sim_params):
-    current = sim_params.first_open
-    test_range = []
-
-    # sometimes the range starts with a non-trading day.
-    if not trading.environment.is_trading_day(current):
-        current = trading.environment.next_trading_day(current)
-
-    for return_val in returns:
-        r = DailyReturn(current, return_val)
-        test_range.append(r)
-        current = trading.environment.next_trading_day(current)
-
-    return test_range
+    return pd.Series(index=sim_params.trading_days[:len(returns)],
+                     data=returns)
 
 
 def create_daily_trade_source(sids, trade_count, sim_params,
@@ -323,24 +272,23 @@ def create_test_df_source(sim_params=None, bars='daily'):
     if sim_params:
         index = sim_params.trading_days
     else:
+        if trading.environment is None:
+            trading.environment = trading.TradingEnvironment()
+
         start = pd.datetime(1990, 1, 3, 0, 0, 0, 0, pytz.utc)
         end = pd.datetime(1990, 1, 8, 0, 0, 0, 0, pytz.utc)
-        index = pd.DatetimeIndex(
-            start=start,
-            end=end,
-            freq=freq
-        )
-        if bars == 'minute':
-            new_index = []
-            for i in index:
-                market_open = i.replace(hour=14,
-                                        minute=31)
-                market_close = i.replace(hour=21,
-                                         minute=0)
 
-                if i >= market_open and i <= market_close:
-                    new_index.append(i)
-            index = new_index
+        days = trading.environment.days_in_range(start, end)
+
+        if bars == 'daily':
+            index = days
+        if bars == 'minute':
+            index = pd.DatetimeIndex([], freq=freq)
+
+            for day in days:
+                day_index = trading.environment.market_minutes_for_day(day)
+                index = index.append(day_index)
+
     x = np.arange(1, len(index) + 1)
 
     df = pd.DataFrame(x, index=index, columns=[0])
@@ -355,7 +303,11 @@ def create_test_panel_source(sim_params=None):
     end = sim_params.last_close \
         if sim_params else pd.datetime(1990, 1, 8, 0, 0, 0, 0, pytz.utc)
 
-    index = pd.DatetimeIndex(start=start, end=end, freq=pd.datetools.day)
+    if trading.environment is None:
+        trading.environment = trading.TradingEnvironment()
+
+    index = trading.environment.days_in_range(start, end)
+
     price = np.arange(0, len(index))
     volume = np.ones(len(index)) * 1000
     arbitrary = np.ones(len(index))
@@ -376,7 +328,10 @@ def create_test_panel_ohlc_source(sim_params=None):
     end = sim_params.last_close \
         if sim_params else pd.datetime(1990, 1, 8, 0, 0, 0, 0, pytz.utc)
 
-    index = pd.DatetimeIndex(start=start, end=end, freq=pd.datetools.day)
+    if trading.environment is None:
+        trading.environment = trading.TradingEnvironment()
+
+    index = trading.environment.days_in_range(start, end)
     price = np.arange(0, len(index)) + 100
     high = price * 1.05
     low = price * 0.95

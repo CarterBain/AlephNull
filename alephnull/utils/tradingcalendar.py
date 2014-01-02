@@ -12,19 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 import pandas as pd
 import pytz
 
 from datetime import datetime, timedelta
 from dateutil import rrule
-from delorean import Delorean
+from functools import partial
 
-start = datetime(1990, 1, 1, tzinfo=pytz.utc)
-end_dln = Delorean(datetime.utcnow(), pytz.utc.zone)
-end_dln.shift('US/Eastern').truncate('day').shift(pytz.utc.zone)
-end = end_dln.datetime - timedelta(days=1)
+start = pd.Timestamp('1990-01-01', tz='UTC')
+end_base = pd.Timestamp('today', tz='UTC')
+# Give an aggressive buffer for logic that needs to use the next trading
+# day or minute.
+end = end_base + timedelta(days=365)
 
 
 def canonicalize_datetime(dt):
@@ -248,18 +247,14 @@ def get_non_trading_days(start, end):
     non_trading_days.sort()
     return pd.DatetimeIndex(non_trading_days)
 
+non_trading_days = get_non_trading_days(start, end)
+trading_day = pd.tseries.offsets.CDay(holidays=non_trading_days)
 
-def get_trading_days(start, end):
-    start = canonicalize_datetime(start)
-    end = canonicalize_datetime(end)
 
-    business_days = pd.DatetimeIndex(start=start, end=end,
-                                     freq=pd.datetools.BDay())
-
-    non_trading_days = get_non_trading_days(start, end)
-
-    return business_days - non_trading_days
-
+def get_trading_days(start, end, trading_day=trading_day):
+    return pd.date_range(start=start.date(),
+                         end=end.date(),
+                         freq=trading_day).tz_localize('UTC')
 
 trading_days = get_trading_days(start, end)
 
@@ -369,3 +364,41 @@ def get_early_closes(start, end):
 
     early_closes.sort()
     return pd.DatetimeIndex(early_closes)
+
+early_closes = get_early_closes(start, end)
+
+
+def get_open_and_close(day, early_closes):
+    market_open = pd.Timestamp(
+        datetime(
+            year=day.year,
+            month=day.month,
+            day=day.day,
+            hour=9,
+            minute=31),
+        tz='US/Eastern').tz_convert('UTC')
+    # 1 PM if early close, 4 PM otherwise
+    close_hour = 13 if day in early_closes else 16
+    market_close = pd.Timestamp(
+        datetime(
+            year=day.year,
+            month=day.month,
+            day=day.day,
+            hour=close_hour),
+        tz='US/Eastern').tz_convert('UTC')
+
+    return market_open, market_close
+
+
+def get_open_and_closes(trading_days, early_closes):
+    open_and_closes = pd.DataFrame(index=trading_days,
+                                   columns=('market_open', 'market_close'))
+
+    get_o_and_c = partial(get_open_and_close, early_closes=early_closes)
+
+    open_and_closes['market_open'], open_and_closes['market_close'] = \
+        zip(*open_and_closes.index.map(get_o_and_c))
+
+    return open_and_closes
+
+open_and_closes = get_open_and_closes(trading_days, early_closes)

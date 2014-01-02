@@ -23,9 +23,7 @@ Dependencies (zipline)
 * pandas (>= 0.9.0)
 * pytz
 * Logbook
-* blist
 * requests
-* delorean
 * iso8601
 * [python-dateutil](https://pypi.python.org/pypi/python-dateutil) (>= 2.1)
 

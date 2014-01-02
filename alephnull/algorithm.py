@@ -38,10 +38,10 @@ from alephnull.finance.slippage import (
     SlippageModel,
     transact_partial
 )
-from alephnull.finance.commission import PerShare, PerTrade
+from alephnull.finance.commission import PerShare, PerTrade, PerDollar
 from alephnull.finance.blotter import Blotter
 from alephnull.finance.constants import ANNUALIZER
-import alephnull.finance.trading as trading
+from alephnull.finance import trading
 import alephnull.protocol
 from alephnull.protocol import Event
 
@@ -89,8 +89,9 @@ class TradingAlgorithm(object):
                If not provided, will extract from data_frequency.
             capital_base : float <default: 1.0e5>
                How much capital to start with.
+            instant_fill : bool <default: False>
+               Whether to fill orders immediately or on next bar.
         """
-        self._portfolio = None
         self.datetime = None
 
         self.registered_transforms = {}
@@ -102,6 +103,7 @@ class TradingAlgorithm(object):
         self.logger = None
 
         self.benchmark_return_source = None
+        self.perf_tracker = None
 
         # default components for transact
         self.slippage = VolumeShareSlippage()
@@ -124,10 +126,14 @@ class TradingAlgorithm(object):
         self.sim_params = kwargs.pop('sim_params', None)
         if self.sim_params:
             self.sim_params.data_frequency = self.data_frequency
+            self.perf_tracker = PerformanceTracker(self.sim_params)
 
         self.blotter = kwargs.pop('blotter', None)
         if not self.blotter:
             self.blotter = Blotter()
+
+        self.portfolio_needs_update = True
+        self._portfolio = None
 
         # an algorithm subclass needs to set initialized to True when
         # it is fully initialized.
@@ -174,13 +180,13 @@ class TradingAlgorithm(object):
         """
         if self.benchmark_return_source is None:
             benchmark_return_source = [
-                Event({'dt': ret.date,
-                       'returns': ret.returns,
+                Event({'dt': dt,
+                       'returns': ret,
                        'type': alephnull.protocol.DATASOURCE_TYPE.BENCHMARK,
                        'source_id': 'benchmarks'})
-                for ret in trading.environment.benchmark_returns
-                if ret.date.date() >= sim_params.period_start.date()
-                and ret.date.date() <= sim_params.period_end.date()
+                for dt, ret in trading.environment.benchmark_returns.iterkv()
+                if dt.date() >= sim_params.period_start.date()
+                and dt.date() <= sim_params.period_end.date()
             ]
         else:
             benchmark_return_source = self.benchmark_return_source
@@ -213,9 +219,14 @@ class TradingAlgorithm(object):
         """
         sim_params.data_frequency = self.data_frequency
 
+        # perf_tracker will be instantiated in __init__ if a sim_params
+        # is passed to the constructor. If not, we instantiate here.
+        if self.perf_tracker is None:
+            self.perf_tracker = PerformanceTracker(sim_params)
+
         self.data_gen = self._create_data_generator(source_filter,
                                                     sim_params)
-        self.perf_tracker = PerformanceTracker(sim_params)
+
         self.trading_client = AlgorithmSimulator(self, sim_params)
 
         transact_method = transact_partial(self.slippage, self.commission)
@@ -304,6 +315,10 @@ class TradingAlgorithm(object):
 
             self.transforms.append(sf)
 
+        # force a reset of the performance tracker, in case
+        # this is a repeat run of the algorithm.
+        self.perf_tracker = None
+
         # create transforms and zipline
         self.gen = self._create_generator(sim_params)
 
@@ -369,10 +384,29 @@ class TradingAlgorithm(object):
         return self.blotter.order(sid, amount, limit_price, stop_price)
 
     def order_value(self, sid, value, limit_price=None, stop_price=None):
+        """
+        Place an order by desired value rather than desired number of shares.
+        If the requested sid is found in the universe, the requested value is
+        divided by its price to imply the number of shares to transact.
+
+        value > 0 :: Buy/Cover
+        value < 0 :: Sell/Short
+        Market order:    order(sid, value)
+        Limit order:     order(sid, value, limit_price)
+        Stop order:      order(sid, value, None, stop_price)
+        StopLimit order: order(sid, value, limit_price, stop_price)
+        """
         last_price = self.trading_client.current_data[sid].price
-        return self.blotter.order_value(sid, value, last_price,
-                                        limit_price=limit_price,
-                                        stop_price=stop_price)
+        if np.allclose(last_price, 0):
+            zero_message = "Price of 0 for {psid}; can't infer value".format(
+                psid=sid
+            )
+            self.logger.debug(zero_message)
+            # Don't place any order
+            return
+        else:
+            amount = value / last_price
+            return self.order(sid, amount, limit_price, stop_price)
 
     @property
     def recorded_vars(self):
@@ -380,10 +414,17 @@ class TradingAlgorithm(object):
 
     @property
     def portfolio(self):
-        return self._portfolio
+        # internally this will cause a refresh of the
+        # period performance calculations.
+        return self.perf_tracker.get_portfolio()
 
-    def set_portfolio(self, portfolio):
-        self._portfolio = portfolio
+    def updated_portfolio(self):
+        # internally this will cause a refresh of the
+        # period performance calculations.
+        if self.portfolio_needs_update:
+            self._portfolio = self.perf_tracker.get_portfolio()
+            self.portfolio_needs_update = False
+        return self._portfolio
 
     def set_logger(self, logger):
         self.logger = logger
@@ -419,7 +460,7 @@ class TradingAlgorithm(object):
         self.slippage = slippage
 
     def set_commission(self, commission):
-        if not isinstance(commission, (PerShare, PerTrade)):
+        if not isinstance(commission, (PerShare, PerTrade, PerDollar)):
             raise UnsupportedCommissionModel()
 
         if self.initialized:
@@ -449,7 +490,7 @@ class TradingAlgorithm(object):
         value = self.portfolio.portfolio_value * percent
         return self.order_value(sid, value, limit_price, stop_price)
 
-    def target(self, sid, target, limit_price=None, stop_price=None):
+    def order_target(self, sid, target, limit_price=None, stop_price=None):
         """
         Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -464,7 +505,8 @@ class TradingAlgorithm(object):
         else:
             return self.order(sid, target, limit_price, stop_price)
 
-    def target_value(self, sid, target, limit_price=None, stop_price=None):
+    def order_target_value(self, sid, target, limit_price=None,
+                           stop_price=None):
         """
         Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -481,7 +523,8 @@ class TradingAlgorithm(object):
         else:
             return self.order_value(sid, target, limit_price, stop_price)
 
-    def target_percent(self, sid, target, limit_price=None, stop_price=None):
+    def order_target_percent(self, sid, target, limit_price=None,
+                             stop_price=None):
         """
         Place an order to adjust a position to a target percent of the
         current portfolio value. If the position doesn't already exist, this is
@@ -501,3 +544,45 @@ class TradingAlgorithm(object):
 
         req_value = target_value - current_value
         return self.order_value(sid, req_value, limit_price, stop_price)
+
+    def get_open_orders(self, sid=None):
+        if sid is None:
+            return {key: [order.to_api_obj() for order in orders]
+                    for key, orders
+                    in self.blotter.open_orders.iteritems()}
+        if sid in self.blotter.open_orders:
+            orders = self.blotter.open_orders[sid]
+            return [order.to_api_obj() for order in orders]
+        return []
+
+    def get_order(self, order_id):
+        if order_id in self.blotter.orders:
+            return self.blotter.orders[order_id].to_api_obj()
+
+    def cancel_order(self, order_param):
+        order_id = order_param
+        if isinstance(order_param, zipline.protocol.Order):
+            order_id = order_param.id
+
+        self.blotter.cancel(order_id)
+
+    def raw_positions(self):
+        """
+        Returns the current portfolio for the algorithm.
+
+        N.B. this is not done as a property, so that the function can be
+        passed and called from within a source.
+        """
+        # Return the 'internal' positions object, as in the one that is
+        # not passed to the algo, and thus should not have tainted keys.
+        return self.perf_tracker.cumulative_performance.positions
+
+    def raw_orders(self):
+        """
+        Returns the current open orders from the blotter.
+
+        N.B. this is not a property, so that the function can be passed
+        and called back from within a source.
+        """
+
+        return self.blotter.open_orders

@@ -14,7 +14,7 @@
 # limitations under the License.
 from logbook import Logger, Processor
 
-import alephnull.finance.trading as trading
+from alephnull.finance import trading
 from alephnull.protocol import (
     BarData,
     SIDData,
@@ -102,7 +102,6 @@ class AlgorithmSimulator(object):
         # inject the current algo
         # snapshot time to any log record generated.
         with self.processor.threadbound():
-
             updated = False
             bm_updated = False
             for date, snapshot in stream_in:
@@ -128,27 +127,27 @@ class AlgorithmSimulator(object):
                         events = []
 
                     for event in snapshot:
-                        if event.type == DATASOURCE_TYPE.SPLIT:
-                            self.algo.blotter.process_split(event)
-
-                        if event.type in (DATASOURCE_TYPE.TRADE,
-                                          DATASOURCE_TYPE.CUSTOM):
+                        if event.type == DATASOURCE_TYPE.TRADE:
                             self.update_universe(event)
                             updated = True
-                        if event.type == DATASOURCE_TYPE.BENCHMARK:
+
+                        elif event.type == DATASOURCE_TYPE.BENCHMARK:
                             self.algo.set_datetime(event.dt)
                             bm_updated = True
+
+                        elif event.type == DATASOURCE_TYPE.CUSTOM:
+                            self.update_universe(event)
+                            updated = True
+
+                        elif event.type == DATASOURCE_TYPE.SPLIT:
+                            self.algo.blotter.process_split(event)
+
                         # If we are instantly filling orders we process
                         # them after handle_data().
                         if not self.algo.instant_fill:
                             self.process_event(event)
                         else:
                             events.append(event)
-
-                    # Update our portfolio.
-                    self.algo.set_portfolio(
-                        self.algo.perf_tracker.get_portfolio()
-                    )
 
                     # Send the current state of the universe
                     # to the user's algo.
@@ -174,6 +173,7 @@ class AlgorithmSimulator(object):
                     # updates, we need to emit a performance message.
                     if bm_updated:
                         bm_updated = False
+                        self.algo.updated_portfolio()
                         yield self.get_message(date)
 
                     # When emitting minutely, we re-iterate the day as a
@@ -194,6 +194,8 @@ class AlgorithmSimulator(object):
                                         mkt_close
                                     )
                                 self.algo.perf_tracker.handle_intraday_close()
+
+                    self.algo.portfolio_needs_update = True
 
             risk_message = self.algo.perf_tracker.handle_simulation_end()
             yield risk_message
@@ -217,8 +219,10 @@ class AlgorithmSimulator(object):
         Update the universe with new event information.
         """
         # Update our knowledge of this event's sid
-        if event.sid in self.current_data:
+        # rather than use if event.sid in ..., just trying
+        # and handling the exception is significantly faster
+        try:
             sid_data = self.current_data[event.sid]
-        else:
+        except KeyError:
             sid_data = self.current_data[event.sid] = SIDData()
         sid_data.__dict__.update(event.__dict__)

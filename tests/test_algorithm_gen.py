@@ -15,12 +15,15 @@
 # limitations under the License.
 
 from unittest import TestCase
-from nose.tools import timed
+from nose.tools import (
+    timed,
+    nottest
+)
 
 from datetime import datetime
 
 import pytz
-import zipline.finance.trading as trading
+from zipline.finance import trading
 from zipline.algorithm import TradingAlgorithm
 from zipline.finance import slippage
 from zipline.utils import factory
@@ -81,6 +84,7 @@ class AlgorithmGeneratorTestCase(TestCase):
     def tearDown(self):
         teardown_logger(self)
 
+    @nottest
     def test_lse_algorithm(self):
 
         lse = trading.TradingEnvironment(
