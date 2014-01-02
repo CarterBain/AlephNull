@@ -86,7 +86,7 @@ from . position import positiondict
 log = logbook.Logger('Performance')
 
 
-class PerformancePeriod(object):
+class FuturesPerformancePeriod(PerformancePeriod):
 
     def __init__(
             self,
@@ -384,77 +384,3 @@ class PerformancePeriod(object):
             if pos.amount != 0:
                 positions.append(pos.to_dict())
         return positions
-
-
-class FuturesPerformancePeriod(object):
-    """We need to replicate:
-    * calculate_performance
-    * execute_transaction
-    * record_order
-    * update_last_sale
-    """
-    def __init__(
-            self,
-            starting_cash,
-            period_open=None,
-            period_close=None,
-            keep_transactions=True,
-            keep_orders=False,
-            serialize_positions=True):
-        self.backing_period = PerformancePeriod(starting_cash, period_open, period_close, keep_transactions,
-                                                keep_orders, serialize_positions)
-
-        self.margin_account_value = starting_cash
-        self.owned_positions = {}  # will have a format like {("GS", "N10"): {amount: 100, last_price: 0.25}
-        self.margin_history = {}  # format like {Timestamp(...): 400.30}
-
-        self.contract_multiplier = 100
-        self.maintenance_margin_rate = 0.20
-        self.initial_margin_rate = 0.30
-
-    def record_order(self, order):
-        # self.owned_positions[order.sid] = order.amount
-
-        self.backing_period.record_order(order)
-
-    def execute_transaction(self, txn):
-        contract_multiplier = 1000
-
-        margin_for_new_txn = txn.price * contract_multiplier * self.initial_margin_rate * txn.amount
-
-        if txn.sid in self.owned_positions:
-            self.recalculate_margin_from_price_change(txn.sid, txn.price)
-
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
-                self.owned_positions[txn.sid]['amount'] += txn.amount
-        else:  # buying the first units of a contract
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
-                self.owned_positions[txn.sid] = {'amount': txn.amount, 'last_price': txn.price}
-
-    def calculate_maintenance_margin(self):
-        """Uses the owned_positions dictionary to calculate the minimum a margin account must meet in order for
-        new transactions to take place."""
-
-        maintenance_margin = 0
-        for position in self.owned_positions.values():
-            maintenance_margin += self.contract_multiplier * position['last_price'] * \
-                                  self.maintenance_margin_rate * position['amount']
-        return maintenance_margin
-
-    def update_last_sale(self, event):
-        if event.sid in self.owned_positions:
-            self.recalculate_margin_from_price_change(event.sid, event.price)
-            self.margin_history[event.dt] = self.margin_account_value
-
-    def recalculate_margin_from_price_change(self, sid, new_price):
-        """Adjusts the margin account value to compensate with a change in price of an already-owned contract"""
-        contract_multiplier = 1000
-        last_price = self.owned_positions[sid]['last_price']
-        amount = self.owned_positions[sid]['amount']
-
-        delta = contract_multiplier * (new_price - last_price) * amount
-        self.margin_account_value += delta
-        self.owned_positions[sid]['last_price'] = new_price
-
-    def __getattr__(self, name):
-        return getattr(self.backing_period, name)

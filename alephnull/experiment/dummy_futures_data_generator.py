@@ -8,12 +8,15 @@ contract - a low level symbol that represents a specific contract like ZLF17
 
 from pandas.tslib import Timestamp
 from pandas.core.frame import DataFrame
+from collections import OrderedDict
 import datetime
 import random
 import pytz
 import pandas as pd
 
-ACCEPTABLE_SYMBOLS = {
+# Presets
+
+MORE_ACCEPTABLE_SYMBOLS = {
     "GC": "GHMQVZ",
     "SI": "HKNUZ",
     "HG": "HKNUZ",
@@ -26,6 +29,32 @@ ACCEPTABLE_SYMBOLS = {
     "LE": "GJMQVZ",
     "ZL": "FHKNQUVZ",
 }
+
+LESS_ACCEPTABLE_SYMBOLS = {
+    "GC": "GHV",
+    "HG": "HUZ",
+}
+
+MORE_BAR_RANGE = (Timestamp('2013-05-13 13:30:00+0000', tz='UTC'), Timestamp('2013-09-11 20:30:00+0000', tz='UTC'))
+LESS_BAR_RANGE = (Timestamp('2013-05-13 13:30:00+0000', tz='UTC'), Timestamp('2013-05-15 20:30:00+0000', tz='UTC'))
+
+MORE_CONTRACT_OUT_LIMIT = 2020
+LESS_CONTRACT_OUT_LIMIT = 2014
+
+MORE_STEP = datetime.timedelta(minutes=30)
+LESS_STEP = datetime.timedelta(days=1)
+
+# Configuration
+
+ACCEPTABLE_SYMBOLS = LESS_ACCEPTABLE_SYMBOLS
+BAR_RANGE = LESS_BAR_RANGE
+CONTRACT_OUT_LIMIT = LESS_CONTRACT_OUT_LIMIT
+STEP = LESS_STEP
+
+CONTRACT_COUNT = sum([sum([1 for m in month_list]) for month_list in [x for x in ACCEPTABLE_SYMBOLS.itervalues()]])
+
+
+
 
 class PrevIterator(object):
     """Iterator with the capability to fetch the previous element
@@ -51,17 +80,17 @@ class PrevIterator(object):
 def lazy_contracts():
     for symbol, months in ACCEPTABLE_SYMBOLS.iteritems():
         for month in list(months):
-            for year in range(datetime.date.today().year, 2020 + 1):
+            for year in range(datetime.date.today().year, CONTRACT_OUT_LIMIT + 1):
                 short_year = year - 2000
                 yield (symbol, month, str(short_year))
 
 
 def lazy_timestamps():
-    start = Timestamp('2013-05-13 13:30:00+0000', tz='UTC')
-    end = Timestamp('2013-09-11 20:30:00+0000', tz='UTC')
-    exchange_opens = datetime.time(hour=13, minute=30) # UTC
-    exchange_closes = datetime.time(hour=20, minute=0) # UTC
-    step = datetime.timedelta(minutes=30)
+    start = BAR_RANGE[0]
+    end = BAR_RANGE[1]
+    exchange_opens = datetime.time(hour=13, minute=30)  # UTC
+    exchange_closes = datetime.time(hour=20, minute=0)  # UTC
+    step = STEP
     
     running_timestamp = start
     while running_timestamp <= end:
@@ -85,7 +114,7 @@ def create_dummy_universe_dict():
     WARNING: Because the underlying data structure has to be highly nested, the logic in here
     will be highly nested.
     """
-    universe_dict = {}
+    universe_dict = OrderedDict()
     timestamps = PrevIterator(lazy_timestamps())
     for timestamp in timestamps:
         universe_dict[timestamp] = {}
