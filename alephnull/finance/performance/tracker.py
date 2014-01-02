@@ -66,7 +66,7 @@ from pandas.tseries.tools import normalize_date
 import alephnull.protocol as zp
 import alephnull.finance.risk as risk
 import alephnull.finance.trading as trading
-from . period import PerformancePeriod
+from . period import PerformancePeriod, FuturesPerformancePeriod
 
 log = logbook.Logger('Performance')
 
@@ -168,6 +168,22 @@ class PerformanceTracker(object):
         self.day_count = 0.0
         self.txn_count = 0
         self.event_count = 0
+		
+		self.futures_cumulative_performance = FuturesPerformancePeriod(
+             # initial cash is your capital base.
+            self.capital_base,
+            # the cumulative period will be calculated over the entire test.
+            self.period_start,
+            self.period_end,
+            # don't save the transactions for the cumulative
+            # period
+            keep_transactions=False,
+            keep_orders=False,
+            # don't serialize positions for cumualtive period
+            serialize_positions=False
+        )
+
+        self.perf_periods.append(self.futures_cumulative_performance)
 
     def __repr__(self):
         return "%s(%r)" % (
