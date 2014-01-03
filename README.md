@@ -3,7 +3,7 @@ AlephNull
 AlephNull is a python module for the development
 and execution of algorithmic trading strategies.
 The library is being developed under commission
-by [Carter Bain](carterbain.com). 
+by [Carter Bain](http://www.carterbain.com). 
 
 The module is built on top of the [Zipline library](https://github.com/quantopian/zipline), 
 the backbone of the web-based backtesting
