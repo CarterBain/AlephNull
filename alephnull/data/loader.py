@@ -89,7 +89,7 @@ def dump_treasury_curves(module='treasuries', filename='treasury_curves.csv'):
     Puts source treasury and data into zipline.
     """
     try:
-        m = importlib.import_module("." + module, package='zipline.data')
+        m = importlib.import_module("." + module, package='alephnull.data')
     except ImportError:
         raise NotImplementedError(
             'Treasury curve {0} module not implemented'.format(module))
