@@ -24,20 +24,20 @@ from itertools import groupby, ifilter
 from operator import attrgetter
 
 from alephnull.errors import (
-	UnsupportedSlippageModel,
-	OverrideSlippagePostInit,
-	UnsupportedCommissionModel,
-	OverrideCommissionPostInit
-	)
+UnsupportedSlippageModel,
+OverrideSlippagePostInit,
+UnsupportedCommissionModel,
+OverrideCommissionPostInit
+)
 from alephnull.finance.performance import PerformanceTracker
 from alephnull.sources import DataFrameSource, DataPanelSource
 from alephnull.utils.factory import create_simulation_parameters
 from alephnull.transforms.utils import StatefulTransform
 from alephnull.finance.slippage import (
-	VolumeShareSlippage,
-	SlippageModel,
-	transact_partial
-	)
+VolumeShareSlippage,
+SlippageModel,
+transact_partial
+)
 from alephnull.finance.commission import PerShare, PerTrade
 from alephnull.finance.blotter import Blotter
 from alephnull.finance.constants import ANNUALIZER
@@ -46,10 +46,10 @@ import alephnull.protocol
 from alephnull.protocol import Event
 
 from alephnull.gens.composites import (
-	date_sorted_sources,
-	sequential_transforms,
-	alias_dt
-	)
+date_sorted_sources,
+sequential_transforms,
+alias_dt
+)
 from alephnull.gens.tradesimulation import AlgorithmSimulator
 
 DEFAULT_CAPITAL_BASE = float("1.0e5")
@@ -374,7 +374,7 @@ class TradingAlgorithm(object):
 			self._recorded_vars[name] = value
 
 	def order(self, sid, amount, limit_price=None, stop_price=None):
-		self.blotter.update_account(self.perf_tracker.todays_performance)
+		self.blotter.update_account(self.portfolio)
 		return self.blotter.order(sid, amount, limit_price, stop_price)
 
 	def order_value(self, sid, value, limit_price=None, stop_price=None):

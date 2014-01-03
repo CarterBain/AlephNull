@@ -39,5 +39,8 @@ if __name__ == '__main__':
 
 	simple_algo = BuyStratasys(leverage_restrictions=[200, 1])
 	results = simple_algo.run(data)
-	results.portfolio_value.plot()
+	fig = plt.figure()
+	ax1 = fig.add_subplot(111)
+	results.portfolio_value.plot(ax=ax1)
+	fig.show()
 
