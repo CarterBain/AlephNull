@@ -16,10 +16,10 @@ from logbook import Logger, Processor
 
 import alephnull.finance.trading as trading
 from alephnull.protocol import (
-	BarData,
-	SIDData,
-	DATASOURCE_TYPE
-	)
+BarData,
+SIDData,
+DATASOURCE_TYPE
+)
 from alephnull.gens.utils import hash_args
 
 log = Logger('Trade Simulation')
@@ -27,8 +27,8 @@ log = Logger('Trade Simulation')
 
 class AlgorithmSimulator(object):
 	EMISSION_TO_PERF_KEY_MAP = {
-		'minute': 'minute_perf',
-		'daily': 'daily_perf'
+	'minute': 'minute_perf',
+	'daily': 'daily_perf'
 	}
 
 	def get_hash(self):
@@ -89,9 +89,10 @@ class AlgorithmSimulator(object):
 		process_trade = self.algo.blotter.process_trade
 		for txn, order in process_trade(event):
 			if txn.amount == 0:
-				pass
+				break
 			self.algo.perf_tracker.process_event(txn)
 			self.algo.perf_tracker.process_event(order)
+
 		self.algo.perf_tracker.process_event(event)
 
 	def transform(self, stream_in):
@@ -140,7 +141,7 @@ class AlgorithmSimulator(object):
 						if event.type == DATASOURCE_TYPE.BENCHMARK:
 							self.algo.set_datetime(event.dt)
 							bm_updated = True
-							# If we are instantly filling orders we process
+						# If we are instantly filling orders we process
 						# them after handle_data().
 						if not self.algo.instant_fill:
 							self.process_event(event)

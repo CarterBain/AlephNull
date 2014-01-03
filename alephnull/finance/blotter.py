@@ -26,10 +26,10 @@ import alephnull.errors
 import alephnull.protocol as zp
 
 from alephnull.finance.slippage import (
-	VolumeShareSlippage,
-	transact_partial,
-	check_order_triggers
-	)
+VolumeShareSlippage,
+transact_partial,
+check_order_triggers
+)
 from alephnull.finance.commission import PerShare
 import alephnull.utils.math_utils as zp_math
 
@@ -193,8 +193,8 @@ class Blotter(object):
 		for order in orders_to_modify:
 			order.handle_split(split_event)
 
-	def update_account(self, perf_tracker):
-		self.account = perf_tracker
+	def update_account(self, portfolio):
+		self.portfolio = portfolio
 
 	def process_trade(self, trade_event):
 
@@ -221,17 +221,25 @@ class Blotter(object):
 				yield txn, order
 				continue
 
+			#if order is to offset an exiting position leverage check is skipped
+			if self.portfolio.positions[order.sid].amount + order.amount != 0:
+
 			# this enforces leverage restrictions for a equity position
 			# however it provides no method for enforcing a margin call on an existing position
-			if abs(order.amount * txn.price) > self.account.starting_cash * self.leverage[order.direction]:
-				capitalerror = 'requested to transact ${} of {}, with ${} available'
-				log.warn(capitalerror.format(order.amount * txn.price, order.sid,
-				                             max(self.account.starting_cash, 0) *
-				                             self.leverage[order.direction]))
-				self.cancel(order.id)
-				txn.amount = 0
-				txn.commission = 0
-				yield txn, order
+				if abs(txn.amount * txn.price) > self.portfolio.cash * self.leverage[order.direction]:
+					capitalerror = 'INSUFFICIENT CAPITAL\n' \
+					               'requested to transact ${} of {}, with ${} available \n' \
+					               'filled {} of {} shares, outstanding {} shares cancelled'
+
+					log.warn(capitalerror.format(txn.amount * txn.price, order.sid,
+					                             max(self.portfolio.cash, 0) *
+					                             self.leverage[order.direction],
+					                             order.filled, order.amount,
+					                             order.amount - order.filled))
+					self.cancel(order.id)
+					txn.amount = 0
+					txn.commission = 0
+					yield txn, order
 
 			# Todo: figure out a way to cancel transactions instead of setting amount to zero
 			# currently to enforce leverage restrictions, txn.amount is set to 0
@@ -239,9 +247,9 @@ class Blotter(object):
 			# if txn.amount == 0:
 			#     raise alephnull.errors.TransactionWithNoAmount(txn=txn)
 
-			# if math.copysign(1, txn.amount) != order.direction:
-			# 	raise alephnull.errors.TransactionWithWrongDirection(
-			# 		txn=txn, order=order)
+			if math.copysign(1, txn.amount) != order.direction:
+				raise alephnull.errors.TransactionWithWrongDirection(
+					txn=txn, order=order)
 			if abs(txn.amount) > abs(self.orders[txn.order_id].amount):
 				raise alephnull.errors.TransactionVolumeExceedsOrder(
 					txn=txn, order=order)
