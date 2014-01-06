@@ -412,12 +412,18 @@ class FuturesPerformancePeriod(object):
         self.maintenance_margin_rate = 0.20
         self.initial_margin_rate = 0.30
 
+        self.gameover = False
+
     def record_order(self, order):
         # self.owned_positions[order.sid] = order.amount
 
         self.backing_period.record_order(order)
 
     def execute_transaction(self, txn):
+        if self.gameover:
+            self.margin_history[txn.dt] = self.margin_account_value
+            return
+
         contract_multiplier = 1000
 
         margin_for_new_txn = txn.price * contract_multiplier * self.initial_margin_rate * txn.amount
@@ -442,9 +448,14 @@ class FuturesPerformancePeriod(object):
         return maintenance_margin
 
     def update_last_sale(self, event):
+        if self.gameover:
+            self.margin_history[event.dt] = self.margin_account_value
+            return
+
         if event.sid in self.owned_positions:
             self.recalculate_margin_from_price_change(event.sid, event.price)
-            self.margin_history[event.dt] = self.margin_account_value
+
+        self.margin_history[event.dt] = self.margin_account_value
 
     def recalculate_margin_from_price_change(self, sid, new_price):
         """Adjusts the margin account value to compensate with a change in price of an already-owned contract"""
@@ -455,6 +466,10 @@ class FuturesPerformancePeriod(object):
         delta = contract_multiplier * (new_price - last_price) * amount
         self.margin_account_value += delta
         self.owned_positions[sid]['last_price'] = new_price
+
+        # margin call logic
+        if self.margin_account_value <= 0:
+            self.gameover = True
 
     def __getattr__(self, name):
         return getattr(self.backing_period, name)
