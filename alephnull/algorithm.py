@@ -13,15 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from copy import copy
+from datetime import datetime
+from itertools import groupby, ifilter
+from operator import attrgetter
 
 import pytz
 import pandas as pd
 import numpy as np
-
-from datetime import datetime
-
-from itertools import groupby, ifilter
-from operator import attrgetter
 
 from alephnull.errors import (
 UnsupportedSlippageModel,
@@ -44,7 +42,6 @@ from alephnull.finance.constants import ANNUALIZER
 import alephnull.finance.trading as trading
 import alephnull.protocol
 from alephnull.protocol import Event
-
 from alephnull.gens.composites import (
 date_sorted_sources,
 sequential_transforms,
@@ -90,9 +87,6 @@ class TradingAlgorithm(object):
                If not provided, will extract from data_frequency.
             capital_base : float <default: 1.0e5>
                How much capital to start with.
-            leverage_restrictions : list <default [1, 1]>
-               Capital multiplier [long, short],
-               Regulation T margin restrictions are [1.5, .5]
         """
 		self._portfolio = None
 		self.datetime = None
@@ -129,14 +123,9 @@ class TradingAlgorithm(object):
 		if self.sim_params:
 			self.sim_params.data_frequency = self.data_frequency
 
-		if 'leverage_restrictions' in kwargs:
-			self.leverage_restrictions = kwargs['leverage_restrictions']
-		else:
-			self.leverage_restrictions = [1, 1]
-
 		self.blotter = kwargs.pop('blotter', None)
 		if not self.blotter:
-			self.blotter = Blotter(self.leverage_restrictions)
+			self.blotter = Blotter()
 
 		# an algorithm subclass needs to set initialized to True when
 		# it is fully initialized.

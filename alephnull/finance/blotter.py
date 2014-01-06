@@ -16,22 +16,22 @@
 
 import math
 import uuid
-
 from copy import copy
-from logbook import Logger
 from collections import defaultdict
+
+from logbook import Logger
 import numpy as np
 
 import alephnull.errors
 import alephnull.protocol as zp
-
 from alephnull.finance.slippage import (
-VolumeShareSlippage,
-transact_partial,
-check_order_triggers
-)
+	VolumeShareSlippage,
+	transact_partial,
+	check_order_triggers
+	)
 from alephnull.finance.commission import PerShare
 import alephnull.utils.math_utils as zp_math
+
 
 log = Logger('Blotter')
 
@@ -56,7 +56,7 @@ def round_for_minimum_price_variation(x, is_buy, diff=(0.0095 - .005)):
 
 
 class Blotter(object):
-	def __init__(self, leverage_multiples):
+	def __init__(self):
 		self.transact = transact_partial(VolumeShareSlippage(), PerShare())
 		# these orders are aggregated by sid
 		self.open_orders = defaultdict(list)
@@ -67,7 +67,6 @@ class Blotter(object):
 		self.new_orders = []
 		self.current_dt = None
 		self.max_shares = int(1e+11)
-		self.leverage = dict(zip([1.0, -1], leverage_multiples))
 
 	def __repr__(self):
 		return """
@@ -196,6 +195,43 @@ class Blotter(object):
 	def update_account(self, portfolio):
 		self.portfolio = portfolio
 
+	def handle_leverage(self, txn, order):
+		leverage_err = 'INSUFFICIENT CAPITAL\n' \
+		               'requested to transact ${} of {}, with ${} available \n' \
+		               'filled {} of {} shares, outstanding {} shares cancelled'
+
+		#if this offsets an existing position return
+		if self.portfolio.positions[order.sid].amount + txn.amount != 0:
+			#test to see if this is a short position
+
+			if txn.amount + self.portfolio.positions[order.sid].amount < 0:
+				if order.direction < 0:
+					if abs(txn.price * (txn.amount + order.filled)) * .5 > self.portfolio.portfolio_value:
+						log.info(leverage_err.format(
+							txn.price * (txn.amount + order.filled),
+							order.sid, self.portfolio.portfolio_value / .5,
+							order.filled, order.amount,
+							order.amount - order.filled))
+						order.direction *= -1
+						self.cancel(order.id)
+						txn.amount = -0
+						txn.commission = 0
+
+
+			#test to see if this is a long position
+			if txn.amount + self.portfolio.positions[order.sid].amount > 0:
+				if order.direction > 0:
+					if txn.price * (txn.amount + order.filled) > self.portfolio.cash:
+						log.info(leverage_err.format(
+							txn.price * (txn.amount + order.filled),
+							order.sid, self.portfolio.cash,
+							order.filled, order.amount,
+							order.amount - order.filled))
+						self.cancel(order.id)
+						txn.amount = 0
+						txn.commission = 0
+
+
 	def process_trade(self, trade_event):
 
 		if trade_event.type != zp.DATASOURCE_TYPE.TRADE:
@@ -221,31 +257,14 @@ class Blotter(object):
 				yield txn, order
 				continue
 
-			#if order is to offset an exiting position leverage check is skipped
-			if self.portfolio.positions[order.sid].amount + order.amount != 0:
+			self.handle_leverage(txn, order)
+			transaction_cost = txn.amount * txn.price
+			self.portfolio.cash -= transaction_cost
+			self.portfolio.positions_value += transaction_cost
+			self.portfolio.portfolio_value = self.portfolio.cash + self.portfolio.positions_value
 
-			# this enforces leverage restrictions for a equity position
-			# however it provides no method for enforcing a margin call on an existing position
-				if abs(txn.amount * txn.price) > self.portfolio.cash * self.leverage[order.direction]:
-					capitalerror = 'INSUFFICIENT CAPITAL\n' \
-					               'requested to transact ${} of {}, with ${} available \n' \
-					               'filled {} of {} shares, outstanding {} shares cancelled'
-
-					log.warn(capitalerror.format(txn.amount * txn.price, order.sid,
-					                             max(self.portfolio.cash, 0) *
-					                             self.leverage[order.direction],
-					                             order.filled, order.amount,
-					                             order.amount - order.filled))
-					self.cancel(order.id)
-					txn.amount = 0
-					txn.commission = 0
-					yield txn, order
-
-			# Todo: figure out a way to cancel transactions instead of setting amount to zero
-			# currently to enforce leverage restrictions, txn.amount is set to 0
-			# therefore the following exception needs shutoff
 			# if txn.amount == 0:
-			#     raise alephnull.errors.TransactionWithNoAmount(txn=txn)
+			# 	raise alephnull.errors.TransactionWithNoAmount(txn=txn)
 
 			if math.copysign(1, txn.amount) != order.direction:
 				raise alephnull.errors.TransactionWithWrongDirection(
