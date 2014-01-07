@@ -75,6 +75,7 @@ omitted).
 from __future__ import division
 import logbook
 import math
+import re
 
 import numpy as np
 import pandas as pd
@@ -412,7 +413,29 @@ class FuturesPerformancePeriod(object):
         self.maintenance_margin_rate = 0.20
         self.initial_margin_rate = 0.30
 
+        self.contract_details = {}  # set externally if at all
         self.gameover = False
+
+    def get_multiplier(self, sid):
+        # multiplier = contract_size * quoted_unit / $
+        # i.e. what do I multiply price by to get the value of a single contract
+
+        fallback = 1000
+
+        contract_size = self.contract_details.get(sid[0], {}).get('contract_size', str(fallback) + " UNITS")
+        quoted_unit = self.contract_details.get(sid[0], {}).get('quoted_unit', "$")
+
+        matches = lambda pattern, text: re.match(pattern, text).group() == text
+
+        # case 1: some number with units like "1,000 TONS" or "42,000 GAL" and a quoted unit that is simply "$"
+        # what "$" means is "$/UNIT", whether UNIT be GAL or LITERS or whatever.
+
+        if quoted_unit == "$" and matches("[0-9,\\.]+ [A-Za-z\\. \$]+", contract_size):
+            chunks = contract_size.split(" ")
+            quantity = float(chunks[0].replace(",", ""))
+            return quantity
+        else:
+            return fallback
 
     def record_order(self, order):
         # self.owned_positions[order.sid] = order.amount
@@ -424,15 +447,14 @@ class FuturesPerformancePeriod(object):
             self.margin_history[txn.dt] = self.margin_account_value
             return
 
-        contract_multiplier = 1000
-
-        margin_for_new_txn = txn.price * contract_multiplier * self.initial_margin_rate * txn.amount
+        margin_for_new_txn = txn.price * self.get_multiplier(txn.sid) * self.initial_margin_rate * txn.amount
 
         if txn.sid in self.owned_positions:
-            self.recalculate_margin_from_price_change(txn.sid, txn.price)
+            self.recalculate_margin_from_price_change(txn.sid, txn.price - txn.commission)
 
             if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
                 self.owned_positions[txn.sid]['amount'] += txn.amount
+                self.margin_account_value -= txn.commission * txn.amount
         else:  # buying the first units of a contract
             if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
                 self.owned_positions[txn.sid] = {'amount': txn.amount, 'last_price': txn.price}
@@ -442,8 +464,8 @@ class FuturesPerformancePeriod(object):
         new transactions to take place."""
 
         maintenance_margin = 0
-        for position in self.owned_positions.values():
-            maintenance_margin += self.contract_multiplier * position['last_price'] * \
+        for sid, position in self.owned_positions.iteritems():
+            maintenance_margin += self.get_multiplier(sid) * position['last_price'] * \
                                   self.maintenance_margin_rate * position['amount']
         return maintenance_margin
 
@@ -459,11 +481,10 @@ class FuturesPerformancePeriod(object):
 
     def recalculate_margin_from_price_change(self, sid, new_price):
         """Adjusts the margin account value to compensate with a change in price of an already-owned contract"""
-        contract_multiplier = 1000
         last_price = self.owned_positions[sid]['last_price']
         amount = self.owned_positions[sid]['amount']
 
-        delta = contract_multiplier * (new_price - last_price) * amount
+        delta = self.get_multiplier(sid) * (new_price - last_price) * amount
         self.margin_account_value += delta
         self.owned_positions[sid]['last_price'] = new_price
 
