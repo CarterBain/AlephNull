@@ -88,11 +88,9 @@ class AlgorithmSimulator(object):
 	def process_event(self, event):
 		process_trade = self.algo.blotter.process_trade
 		for txn, order in process_trade(event):
-			if txn.amount == 0:
-				break
-			self.algo.perf_tracker.process_event(txn)
+			if txn.amount != 0:
+				self.algo.perf_tracker.process_event(txn)
 			self.algo.perf_tracker.process_event(order)
-
 		self.algo.perf_tracker.process_event(event)
 
 	def transform(self, stream_in):
