@@ -52,7 +52,8 @@ class FuturesDataFrameSource(DataSource):
     def mapping(self):
         return {
             'dt': (lambda x: x, 'dt'),
-            'sid': (lambda x: x, 'sid'),
+            'sid': (lambda x: x[:x.find(".")], 'sid'),
+            'contract': (lambda x: x[x.find(".")+1:], 'sid'),
             'price': (float, 'price'),
             'volume': (int, 'volume'),
             'open_interest': (int, 'open_interest'),
