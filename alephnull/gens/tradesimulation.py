@@ -16,10 +16,10 @@ from logbook import Logger, Processor
 
 import alephnull.finance.trading as trading
 from alephnull.protocol import (
-BarData,
-SIDData,
-DATASOURCE_TYPE
-)
+	BarData,
+	SIDData,
+	DATASOURCE_TYPE
+	)
 from alephnull.gens.utils import hash_args
 
 log = Logger('Trade Simulation')
@@ -63,7 +63,6 @@ class AlgorithmSimulator(object):
 		# We want an object that will have empty objects as default
 		# values on missing keys.
 		self.current_data = BarData()
-
 		# We don't have a datetime for the current snapshot until we
 		# receive a message.
 		self.simulation_dt = None
@@ -218,8 +217,16 @@ class AlgorithmSimulator(object):
 		Update the universe with new event information.
 		"""
 		# Update our knowledge of this event's sid
-		if event.sid in self.current_data:
-			sid_data = self.current_data[event.sid]
+
+		if hasattr(event, 'contract'):
+			if event.sid not in self.current_data.__dict__['_data']:
+				self.current_data[event.sid] = {event.contract: SIDData()}
+			sid_data = self.current_data[event.sid][event.contract] = SIDData()
+
 		else:
-			sid_data = self.current_data[event.sid] = SIDData()
+			if event.sid in self.current_data:
+				sid_data = self.current_data[event.sid]
+			else:
+				sid_data = self.current_data[event.sid] = SIDData()
+
 		sid_data.__dict__.update(event.__dict__)
