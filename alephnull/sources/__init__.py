@@ -4,5 +4,6 @@ from alephnull.sources.test_source import SpecificEquityTrades
 __all__ = [
     'DataFrameSource',
     'DataPanelSource',
-    'SpecificEquityTrades'
+    'SpecificEquityTrades',
+    'FuturesDataFrameSource'
 ]
