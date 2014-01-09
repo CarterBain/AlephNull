@@ -84,6 +84,9 @@ from collections import OrderedDict, defaultdict
 import alephnull.protocol as zp
 from . position import positiondict
 
+from pandas.tslib import Timestamp
+from datetime import timedelta
+
 log = logbook.Logger('Performance')
 
 
@@ -414,7 +417,41 @@ class FuturesPerformancePeriod(object):
         self.initial_margin_rate = 0.30
 
         self.contract_details = {}  # set externally if at all
+        self.margin_call = self.scale_back_positions  # can be set to another function externally
         self.gameover = False
+
+    def unit_multiplier(self, currency):
+        """Returns a number C such that given_price / C = value of item in dollars.
+        Another way of figuring is that 1 USD = C other currencies
+        Exchange rates are estimated based on the time this is programmed and are thus in no way accurate.
+        We're not really dealing with currencies so I don't much mind.
+        The ones that matter are mainly dollars and cents (C's of 1 and 100 of course)
+
+        Defaults to 1 if we don't know what to do."""
+
+        return {'$': 1,
+                '$/GAL': 1,
+                '$/GRAM': 1,
+                '$/MBTU': 1,
+                '$/MWH': 1,
+                '$/TON': 1,
+                'AU$': 1.12,
+                'CD$': 1.07,
+                'CHF': 0.91,
+                'CZK': 20.18,
+                'HUF': 220.32,
+                'NOK': 6.17,
+                'NZD': 1.21,
+                'SEK': 6.51,
+                'TRY': 2.17,
+                u'\xa3': 0.61,  # Pound
+                u'\xa5': 104.49,  # Yen
+                u'\xf3': 100,  # Cents
+                u'\u20ac': 0.73, # Euro
+                }.get(currency, 1)
+
+    def dollars_from_currency(self, price, unit):
+        return price / self.unit_multiplier(unit)
 
     def get_multiplier(self, sid):
         # multiplier = contract_size * quoted_unit / $
@@ -425,17 +462,57 @@ class FuturesPerformancePeriod(object):
         contract_size = self.contract_details.get(sid[0], {}).get('contract_size', str(fallback) + " UNITS")
         quoted_unit = self.contract_details.get(sid[0], {}).get('quoted_unit', "$")
 
-        matches = lambda pattern, text: re.match(pattern, text).group() == text
+        def matches(pattern, text):
+            result = re.match(pattern, text)
+            if result is not None:
+                return result.group() == text
+            else:
+                return False
 
         # case 1: some number with units like "1,000 TONS" or "42,000 GAL" and a quoted unit that is simply "$"
         # what "$" means is "$/UNIT", whether UNIT be GAL or LITERS or whatever.
 
-        if quoted_unit == "$" and matches("[0-9,\\.]+ [A-Za-z\\. \$]+", contract_size):
-            chunks = contract_size.split(" ")
-            quantity = float(chunks[0].replace(",", ""))
+        straight_currencies = {'$', 'AU$', 'CD$', 'CHF', 'CZK', 'HUF', 'NOK', 'NZD', 'SEK', 'TRY',
+                                   u'\xa3',    # Pound
+                                   u'\xa5',    # Yen
+                                   u'\xf3',    # Cents
+                                   u'\u20ac',  # Euro
+                              }
+
+        is_standard_quoted_unit = quoted_unit in straight_currencies or matches("\$\/.+", quoted_unit)
+        is_standard_contract_size = matches("[0-9,\\.]+ [A-Za-z\\. \$]+", contract_size)
+
+        is_standard_pointwise_contract_size = matches("\$?[\\.0-9,]+[ ]+(X[ ]+INDEX|TIMES INDEX VALUE)", contract_size)
+
+        if quoted_unit == 'PTS.' and is_standard_pointwise_contract_size:
+            result = ""
+            # remove currency
+            for n, ch in enumerate(contract_size):
+                if ch in '0123456789':
+                    result = contract_size[n:]
+                    break
+            result = result.replace(" ", "").replace("XINDEX", "").replace("TIMESINDEXVALUE", "")
+            return result
+        elif is_standard_quoted_unit and is_standard_contract_size:
+            chunks = [x for x in contract_size.split(" ") if x]
+            quantity = self.dollars_from_currency(
+                float(chunks[0].replace(",", "")),
+                quoted_unit)
             return quantity
         else:
             return fallback
+
+    def get_first_notice(self, sid):
+        # returns a Timestamp representing midnight at the day of first delivery
+        expiration = self.contract_details.get(sid[0], {}).get('contracts', {}).get(sid[1], {}).get('expiration_date')
+        if expiration is not None:
+            return Timestamp(expiration, tz='UTC') - timedelta(days=5)
+        else:
+            delivery_months = "FGHJKMNQUVXZ"
+            contract_delivery_month = delivery_months.find(sid[1][0]) + 1
+            contract_delivery_year = int("20" + str(sid[1][1:]))
+            return Timestamp(contract_delivery_year + "-" + contract_delivery_month + "-01") - timedelta(days=3)
+
 
     def record_order(self, order):
         # self.owned_positions[order.sid] = order.amount
@@ -476,6 +553,8 @@ class FuturesPerformancePeriod(object):
 
         if event.sid in self.owned_positions:
             self.recalculate_margin_from_price_change(event.sid, event.price)
+            if self.calculate_maintenance_margin() > self.margin_account_value:
+                self.margin_call()
 
         self.margin_history[event.dt] = self.margin_account_value
 
@@ -491,6 +570,28 @@ class FuturesPerformancePeriod(object):
         # margin call logic
         if self.margin_account_value <= 0:
             self.gameover = True
+
+    def scale_back_positions(self):
+        # A default option for margin calls where it goes through positions alphabetically exits those positions until
+        # the maintenance margin is below the margin account value
+
+        # we know that
+        #  self.calculate_maintenance_margin() > self.margin_account_value
+
+        positions = list(reversed(sorted(self.owned_positions.items())))
+        while self.calculate_maintenance_margin() > self.margin_account_value:
+            shortfall = self.calculate_maintenance_margin() - self.margin_account_value
+            position = positions.pop()
+            sid = position[0]
+            details = position[1]
+
+            margin_per_contract = self.get_multiplier(sid) * details['last_price'] * self.maintenance_margin_rate
+            contracts_to_exit_amount = int(shortfall / margin_per_contract) + 1
+            if contracts_to_exit_amount >= details['amount']:
+                del self.owned_positions[sid]
+            else:
+                self.owned_positions[sid] -= contracts_to_exit_amount
+
 
     def __getattr__(self, name):
         return getattr(self.backing_period, name)
