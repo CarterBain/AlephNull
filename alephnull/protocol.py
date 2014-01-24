@@ -88,8 +88,10 @@ class Portfolio(object):
 
 class Position(object):
 
-    def __init__(self, sid):
+    def __init__(self, sid, contract=None):
         self.sid = sid
+        if contract is not None:
+            self.contract = contract
         self.amount = 0
         self.cost_basis = 0.0  # per share
         self.last_sale_price = 0.0
@@ -104,7 +106,10 @@ class Position(object):
 class Positions(dict):
 
     def __missing__(self, key):
-        pos = Position(key)
+        if type(key) is tuple:
+            pos = Position(key[0], contract=key[1])
+        else:
+            pos = Position(key)
         self[key] = pos
         return pos
 

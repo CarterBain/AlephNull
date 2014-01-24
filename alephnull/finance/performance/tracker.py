@@ -185,6 +185,7 @@ class PerformanceTracker(object):
         )
 
         self.perf_periods.append(self.futures_cumulative_performance)
+        #self.futures_cumulative_performance.algo = self.algo
 
     def __repr__(self):
         return "%s(%r)" % (

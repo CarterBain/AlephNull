@@ -25,10 +25,10 @@ import numpy as np
 import alephnull.errors
 import alephnull.protocol as zp
 from alephnull.finance.slippage import (
-	VolumeShareSlippage,
-	transact_partial,
-	check_order_triggers
-	)
+    VolumeShareSlippage,
+    transact_partial,
+    check_order_triggers
+    )
 from alephnull.finance.commission import PerShare
 import alephnull.utils.math_utils as zp_math
 
@@ -38,9 +38,9 @@ log = Logger('Blotter')
 from alephnull.utils.protocol_utils import Enum
 
 ORDER_STATUS = Enum(
-	'OPEN',
-	'FILLED',
-	'CANCELLED'
+    'OPEN',
+    'FILLED',
+    'CANCELLED'
 )
 
 
@@ -48,28 +48,28 @@ ORDER_STATUS = Enum(
 # On an order to sell, between .05 above to .95 below a penny, use that penny.
 # buy: [.0095, .0195) -> round to .01, sell: (.0005, .0105] -> round to .01
 def round_for_minimum_price_variation(x, is_buy, diff=(0.0095 - .005)):
-	# relies on rounding half away from zero, unlike numpy's bankers' rounding
-	rounded = round(x - (diff if is_buy else -diff), 2)
-	if zp_math.tolerant_equals(rounded, 0.0):
-		return 0.0
-	return rounded
+    # relies on rounding half away from zero, unlike numpy's bankers' rounding
+    rounded = round(x - (diff if is_buy else -diff), 2)
+    if zp_math.tolerant_equals(rounded, 0.0):
+        return 0.0
+    return rounded
 
 
 class Blotter(object):
-	def __init__(self):
-		self.transact = transact_partial(VolumeShareSlippage(), PerShare())
-		# these orders are aggregated by sid
-		self.open_orders = defaultdict(list)
-		# keep a dict of orders by their own id
-		self.orders = {}
-		# holding orders that have come in since the last
-		# event.
-		self.new_orders = []
-		self.current_dt = None
-		self.max_shares = int(1e+11)
+    def __init__(self):
+        self.transact = transact_partial(VolumeShareSlippage(), PerShare())
+        # these orders are aggregated by sid
+        self.open_orders = defaultdict(list)
+        # keep a dict of orders by their own id
+        self.orders = {}
+        # holding orders that have come in since the last
+        # event.
+        self.new_orders = []
+        self.current_dt = None
+        self.max_shares = int(1e+11)
 
-	def __repr__(self):
-		return """
+    def __repr__(self):
+        return """
 {class_name}(
     transact_partial={transact_partial},
     open_orders={open_orders},
@@ -77,318 +77,328 @@ class Blotter(object):
     new_orders={new_orders},
     current_dt={current_dt})
 """.strip().format(class_name=self.__class__.__name__,
-		           transact_partial=self.transact.args,
-		           open_orders=self.open_orders,
-		           orders=self.orders,
-		           new_orders=self.new_orders,
-		           current_dt=self.current_dt)
+                   transact_partial=self.transact.args,
+                   open_orders=self.open_orders,
+                   orders=self.orders,
+                   new_orders=self.new_orders,
+                   current_dt=self.current_dt)
 
-	def set_date(self, dt):
-		self.current_dt = dt
+    def set_date(self, dt):
+        self.current_dt = dt
 
-	def order(self, sid, amount, limit_price, stop_price, order_id=None):
+    def order(self, sid, amount, limit_price, stop_price, order_id=None):
 
-		# something could be done with amount to further divide
-		# between buy by share count OR buy shares up to a dollar amount
-		# numeric == share count  AND  "$dollar.cents" == cost amount
+        # something could be done with amount to further divide
+        # between buy by share count OR buy shares up to a dollar amount
+        # numeric == share count  AND  "$dollar.cents" == cost amount
 
-		"""
-		amount > 0 :: Buy/Cover
-		amount < 0 :: Sell/Short
-		Market order:    order(sid, amount)
-		Limit order:     order(sid, amount, limit_price)
-		Stop order:      order(sid, amount, None, stop_price)
-		StopLimit order: order(sid, amount, limit_price, stop_price)
-		"""
+        """
+        amount > 0 :: Buy/Cover
+        amount < 0 :: Sell/Short
+        Market order:    order(sid, amount)
+        Limit order:     order(sid, amount, limit_price)
+        Stop order:      order(sid, amount, None, stop_price)
+        StopLimit order: order(sid, amount, limit_price, stop_price)
+        """
 
-		# Fractional shares are not supported.
-		amount = int(amount)
+        if type(sid) is tuple:
+            contract = sid[1]
+            sid = sid[0]
 
-
-		# just validates amount and passes rest on to TransactionSimulator
-		# Tell the user if they try to buy 0 shares of something.
-		if amount == 0:
-			zero_message = "Requested to trade zero shares of {psid}".format(
-				psid=sid
-			)
-			log.debug(zero_message)
-			# Don't bother placing orders for 0 shares.
-			return
-		elif amount > self.max_shares:
-			# Arbitrary limit of 100 billion (US) shares will never be
-			# exceeded except by a buggy algorithm.
-			raise OverflowError("Can't order more than %d shares" %
-			                    self.max_shares)
-
-		if limit_price:
-			limit_price = round_for_minimum_price_variation(limit_price,
-			                                                amount > 0)
-		order = Order(
-			dt=self.current_dt,
-			sid=sid,
-			amount=amount,
-			filled=0,
-			stop=stop_price,
-			limit=limit_price,
-			id=order_id
-		)
-
-		# initialized filled field.
-		order.filled = 0
-		self.open_orders[order.sid].append(order)
-		self.orders[order.id] = order
-		self.new_orders.append(order)
-
-		return order.id
-
-	def order_value(self, sid, value, last_price,
-	                limit_price=None, stop_price=None):
-		"""
-		Place an order by desired value rather than desired number of shares.
-		If the requested sid is found in the universe, the requested value is
-		divided by its price to imply the number of shares to transact.
-
-		value > 0 :: Buy/Cover
-		value < 0 :: Sell/Short
-		Market order:    order(sid, value)
-		Limit order:     order(sid, value, limit_price)
-		Stop order:      order(sid, value, None, stop_price)
-		StopLimit order: order(sid, value, limit_price, stop_price)
-		"""
-		if np.allclose(last_price, 0):
-			zero_message = "Price of 0 for {psid}; can't infer value".format(
-				psid=sid
-			)
-			log.debug(zero_message)
-			# Don't place any order
-			return
-		else:
-			amount = value / last_price
-			return self.order(sid, amount, limit_price, stop_price)
-
-	def cancel(self, order_id):
-		if order_id not in self.orders:
-			return
-
-		cur_order = self.orders[order_id]
-		if cur_order.open:
-			order_list = self.open_orders[cur_order.sid]
-			if cur_order in order_list:
-				order_list.remove(cur_order)
-
-			if cur_order in self.new_orders:
-				self.new_orders.remove(cur_order)
-			cur_order.status = ORDER_STATUS.CANCELLED
-			cur_order.dt = self.current_dt
-			# we want this order's new status to be relayed out
-			# along with newly placed orders.
-			self.new_orders.append(cur_order)
-
-	def process_split(self, split_event):
-		if split_event.sid not in self.open_orders:
-			return
-
-		orders_to_modify = self.open_orders[split_event.sid]
-		for order in orders_to_modify:
-			order.handle_split(split_event)
-
-	def update_account(self, portfolio):
-		self.portfolio = portfolio
-
-	def handle_leverage(self, txn, order):
-		leverage_err = 'INSUFFICIENT CAPITAL\n' \
-		               'requested to transact ${} of {}, with ${} available \n' \
-		               'filled {} of {} shares, outstanding {} shares cancelled'
-
-		#if this offsets an existing position return
-		if self.portfolio.positions[order.sid].amount + txn.amount != 0:
-			#test to see if this is a short position
-
-			if txn.amount + self.portfolio.positions[order.sid].amount < 0:
-				if order.direction < 0:
-					if abs(txn.price * (txn.amount + order.filled)) * .5 > self.portfolio.portfolio_value:
-						log.info(leverage_err.format(
-							txn.price * (txn.amount + order.filled),
-							order.sid, self.portfolio.portfolio_value / .5,
-							order.filled, order.amount,
-							order.amount - order.filled))
-						order.direction *= -1
-						self.cancel(order.id)
-						txn.amount = -0
-						txn.commission = 0
+        # Fractional shares are not supported.
+        amount = int(amount)
 
 
-			#test to see if this is a long position
-			if txn.amount + self.portfolio.positions[order.sid].amount > 0:
-				if order.direction > 0:
-					if txn.price * (txn.amount + order.filled) > self.portfolio.cash:
-						log.info(leverage_err.format(
-							txn.price * (txn.amount + order.filled),
-							order.sid, self.portfolio.cash,
-							order.filled, order.amount,
-							order.amount - order.filled))
-						self.cancel(order.id)
-						txn.amount = 0
-						txn.commission = 0
+        # just validates amount and passes rest on to TransactionSimulator
+        # Tell the user if they try to buy 0 shares of something.
+        if amount == 0:
+            zero_message = "Requested to trade zero shares of {psid}".format(
+                psid=sid
+            )
+            log.debug(zero_message)
+            # Don't bother placing orders for 0 shares.
+            return
+        elif amount > self.max_shares:
+            # Arbitrary limit of 100 billion (US) shares will never be
+            # exceeded except by a buggy algorithm.
+            raise OverflowError("Can't order more than %d shares" %
+                                self.max_shares)
+
+        if limit_price:
+            limit_price = round_for_minimum_price_variation(limit_price,
+                                                            amount > 0)
+
+        order = Order(
+            dt=self.current_dt,
+            sid=sid,
+            amount=amount,
+            filled=0,
+            stop=stop_price,
+            limit=limit_price,
+            id=order_id
+        )
+
+        if 'contract' in locals():
+            order.contract = contract
+
+        # initialized filled field.
+        order.filled = 0
+        self.open_orders[order.sid].append(order)
+        self.orders[order.id] = order
+        self.new_orders.append(order)
+
+        return order.id
+
+    def order_value(self, sid, value, last_price,
+                    limit_price=None, stop_price=None):
+        """
+        Place an order by desired value rather than desired number of shares.
+        If the requested sid is found in the universe, the requested value is
+        divided by its price to imply the number of shares to transact.
+
+        value > 0 :: Buy/Cover
+        value < 0 :: Sell/Short
+        Market order:    order(sid, value)
+        Limit order:     order(sid, value, limit_price)
+        Stop order:      order(sid, value, None, stop_price)
+        StopLimit order: order(sid, value, limit_price, stop_price)
+        """
+        if np.allclose(last_price, 0):
+            zero_message = "Price of 0 for {psid}; can't infer value".format(
+                psid=sid
+            )
+            log.debug(zero_message)
+            # Don't place any order
+            return
+        else:
+            amount = value / last_price
+            return self.order(sid, amount, limit_price, stop_price)
+
+    def cancel(self, order_id):
+        if order_id not in self.orders:
+            return
+
+        cur_order = self.orders[order_id]
+        if cur_order.open:
+            order_list = self.open_orders[cur_order.sid]
+            if cur_order in order_list:
+                order_list.remove(cur_order)
+
+            if cur_order in self.new_orders:
+                self.new_orders.remove(cur_order)
+            cur_order.status = ORDER_STATUS.CANCELLED
+            cur_order.dt = self.current_dt
+            # we want this order's new status to be relayed out
+            # along with newly placed orders.
+            self.new_orders.append(cur_order)
+
+    def process_split(self, split_event):
+        if split_event.sid not in self.open_orders:
+            return
+
+        orders_to_modify = self.open_orders[split_event.sid]
+        for order in orders_to_modify:
+            order.handle_split(split_event)
+
+    def update_account(self, portfolio):
+        self.portfolio = portfolio
+
+    def handle_leverage(self, txn, order):
+        leverage_err = 'INSUFFICIENT CAPITAL\n' \
+                       'requested to transact ${} of {}, with ${} available \n' \
+                       'filled {} of {} shares, outstanding {} shares cancelled'
+
+        #if this offsets an existing position return
+        if self.portfolio.positions[order.sid].amount + txn.amount != 0:
+            #test to see if this is a short position
+
+            if txn.amount + self.portfolio.positions[order.sid].amount < 0:
+                if order.direction < 0:
+                    if abs(txn.price * (txn.amount + order.filled)) * .5 > self.portfolio.portfolio_value:
+                        log.info(leverage_err.format(
+                            txn.price * (txn.amount + order.filled),
+                            order.sid, self.portfolio.portfolio_value / .5,
+                            order.filled, order.amount,
+                            order.amount - order.filled))
+                        order.direction *= -1
+                        self.cancel(order.id)
+                        txn.amount = -0
+                        txn.commission = 0
 
 
-	def process_trade(self, trade_event):
+            #test to see if this is a long position
+            if txn.amount + self.portfolio.positions[order.sid].amount > 0:
+                if order.direction > 0:
+                    if txn.price * (txn.amount + order.filled) > self.portfolio.cash:
+                        log.info(leverage_err.format(
+                            txn.price * (txn.amount + order.filled),
+                            order.sid, self.portfolio.cash,
+                            order.filled, order.amount,
+                            order.amount - order.filled))
+                        self.cancel(order.id)
+                        txn.amount = 0
+                        txn.commission = 0
 
-		if trade_event.type != zp.DATASOURCE_TYPE.TRADE:
-			return
 
-		if zp_math.tolerant_equals(trade_event.volume, 0):
-			# there are zero volume trade_events bc some stocks trade
-			# less frequently than once per minute.
-			return
+    def process_trade(self, trade_event):
 
-		if trade_event.sid in self.open_orders:
-			orders = self.open_orders[trade_event.sid]
-			orders = sorted(orders, key=lambda o: o.dt)
-			# Only use orders for the current day or before
-			current_orders = filter(
-				lambda o: o.dt <= trade_event.dt,
-				orders)
-		else:
-			return
+        if trade_event.type != zp.DATASOURCE_TYPE.TRADE:
+            return
 
-		for order, txn in self.transact(trade_event, current_orders):
-			if txn.type == zp.DATASOURCE_TYPE.COMMISSION:
-				yield txn, order
-				continue
+        if zp_math.tolerant_equals(trade_event.volume, 0):
+            # there are zero volume trade_events bc some stocks trade
+            # less frequently than once per minute.
+            return
 
-			self.handle_leverage(txn, order)
-			transaction_cost = txn.amount * txn.price
-			self.portfolio.cash -= transaction_cost
-			self.portfolio.positions_value += transaction_cost
-			self.portfolio.portfolio_value = self.portfolio.cash + self.portfolio.positions_value
+        if trade_event.sid in self.open_orders:
+            orders = self.open_orders[trade_event.sid]
+            orders = sorted(orders, key=lambda o: o.dt)
+            # Only use orders for the current day or before
+            current_orders = filter(
+                lambda o: o.dt <= trade_event.dt,
+                orders)
+        else:
+            return
 
-			# if txn.amount == 0:
-			# 	raise alephnull.errors.TransactionWithNoAmount(txn=txn)
+        for order, txn in self.transact(trade_event, current_orders):
+            if txn.type == zp.DATASOURCE_TYPE.COMMISSION:
+                yield txn, order
+                continue
 
-			if math.copysign(1, txn.amount) != order.direction:
-				raise alephnull.errors.TransactionWithWrongDirection(
-					txn=txn, order=order)
-			if abs(txn.amount) > abs(self.orders[txn.order_id].amount):
-				raise alephnull.errors.TransactionVolumeExceedsOrder(
-					txn=txn, order=order)
+            self.handle_leverage(txn, order)
+            transaction_cost = txn.amount * txn.price
+            self.portfolio.cash -= transaction_cost
+            self.portfolio.positions_value += transaction_cost
+            self.portfolio.portfolio_value = self.portfolio.cash + self.portfolio.positions_value
 
-			order.filled += txn.amount
-			# mark the date of the order to match the transaction
-			# that is filling it.
-			order.dt = txn.dt
+            # if txn.amount == 0:
+            #     raise alephnull.errors.TransactionWithNoAmount(txn=txn)
 
-			yield txn, order
+            if math.copysign(1, txn.amount) != order.direction:
+                raise alephnull.errors.TransactionWithWrongDirection(
+                    txn=txn, order=order)
+            if abs(txn.amount) > abs(self.orders[txn.order_id].amount):
+                raise alephnull.errors.TransactionVolumeExceedsOrder(
+                    txn=txn, order=order)
 
-		# update the open orders for the trade_event's sid
-		self.open_orders[trade_event.sid] = \
-			[order for order
-			 in self.open_orders[trade_event.sid]
-			 if order.open]
+            order.filled += txn.amount
+            # mark the date of the order to match the transaction
+            # that is filling it.
+            order.dt = txn.dt
+
+            yield txn, order
+
+        # update the open orders for the trade_event's sid
+        self.open_orders[trade_event.sid] = \
+            [order for order
+             in self.open_orders[trade_event.sid]
+             if order.open]
 
 
 class Order(object):
-	def __init__(self, dt, sid, amount, stop=None, limit=None, filled=0, id=None):
-		"""
-		@dt - datetime.datetime that the order was placed
-		@sid - stock sid of the order
-		@amount - the number of shares to buy/sell
-				  a positive sign indicates a buy
-				  a negative sign indicates a sell
-		@filled - how many shares of the order have been filled so far
-		"""
-		# get a string representation of the uuid.
-		self.id = id or self.make_id()
-		self.dt = dt
-		self.created = dt
-		self.sid = sid
-		self.amount = amount
-		self.filled = filled
-		self.status = ORDER_STATUS.OPEN
-		self.stop = stop
-		self.limit = limit
-		self.stop_reached = False
-		self.limit_reached = False
-		self.direction = math.copysign(1, self.amount)
-		self.type = zp.DATASOURCE_TYPE.ORDER
+    def __init__(self, dt, sid, amount, stop=None, limit=None, filled=0, id=None, contract=None):
+        """
+        @dt - datetime.datetime that the order was placed
+        @sid - stock sid of the order
+        @amount - the number of shares to buy/sell
+                  a positive sign indicates a buy
+                  a negative sign indicates a sell
+        @filled - how many shares of the order have been filled so far
+        """
+        # get a string representation of the uuid.
+        if 'contract' is not None:
+            self.contract = contract
+        self.id = id or self.make_id()
+        self.dt = dt
+        self.created = dt
+        self.sid = sid
+        self.amount = amount
+        self.filled = filled
+        self.status = ORDER_STATUS.OPEN
+        self.stop = stop
+        self.limit = limit
+        self.stop_reached = False
+        self.limit_reached = False
+        self.direction = math.copysign(1, self.amount)
+        self.type = zp.DATASOURCE_TYPE.ORDER
 
 
-	def make_id(self):
-		return uuid.uuid4().hex
+    def make_id(self):
+        return uuid.uuid4().hex
 
-	def to_dict(self):
-		py = copy(self.__dict__)
-		for field in ['type', 'direction']:
-			del py[field]
-		return py
+    def to_dict(self):
+        py = copy(self.__dict__)
+        for field in ['type', 'direction']:
+            del py[field]
+        return py
 
-	def to_api_obj(self):
-		pydict = self.to_dict()
-		obj = zp.Order(initial_values=pydict)
-		return obj
+    def to_api_obj(self):
+        pydict = self.to_dict()
+        obj = zp.Order(initial_values=pydict)
+        return obj
 
-	def check_triggers(self, event):
-		"""
-		Update internal state based on price triggers and the
-		trade event's price.
-		"""
-		stop_reached, limit_reached = \
-			check_order_triggers(self, event)
-		if (stop_reached, limit_reached) \
-				!= (self.stop_reached, self.limit_reached):
-			self.dt = event.dt
-		self.stop_reached = stop_reached
-		self.limit_reached = limit_reached
+    def check_triggers(self, event):
+        """
+        Update internal state based on price triggers and the
+        trade event's price.
+        """
+        stop_reached, limit_reached = \
+            check_order_triggers(self, event)
+        if (stop_reached, limit_reached) \
+                != (self.stop_reached, self.limit_reached):
+            self.dt = event.dt
+        self.stop_reached = stop_reached
+        self.limit_reached = limit_reached
 
-	def handle_split(self, split_event):
-		ratio = split_event.ratio
+    def handle_split(self, split_event):
+        ratio = split_event.ratio
 
-		# update the amount, limit_price, and stop_price
-		# by the split's ratio
+        # update the amount, limit_price, and stop_price
+        # by the split's ratio
 
-		# info here: http://finra.complinet.com/en/display/display_plain.html?
-		# rbid=2403&element_id=8950&record_id=12208&print=1
+        # info here: http://finra.complinet.com/en/display/display_plain.html?
+        # rbid=2403&element_id=8950&record_id=12208&print=1
 
-		# new_share_amount = old_share_amount / ratio
-		# new_price = old_price * ratio
+        # new_share_amount = old_share_amount / ratio
+        # new_price = old_price * ratio
 
-		self.amount = int(self.amount / ratio)
+        self.amount = int(self.amount / ratio)
 
-		if self.limit:
-			self.limit = round(self.limit * ratio, 2)
+        if self.limit:
+            self.limit = round(self.limit * ratio, 2)
 
-		if self.stop:
-			self.stop = round(self.stop * ratio, 2)
+        if self.stop:
+            self.stop = round(self.stop * ratio, 2)
 
-	@property
-	def open(self):
-		if self.status == ORDER_STATUS.CANCELLED:
-			return False
+    @property
+    def open(self):
+        if self.status == ORDER_STATUS.CANCELLED:
+            return False
 
-		remainder = self.amount - self.filled
-		if remainder != 0:
-			self.status = ORDER_STATUS.OPEN
-		else:
-			self.status = ORDER_STATUS.FILLED
+        remainder = self.amount - self.filled
+        if remainder != 0:
+            self.status = ORDER_STATUS.OPEN
+        else:
+            self.status = ORDER_STATUS.FILLED
 
-		return self.status == ORDER_STATUS.OPEN
+        return self.status == ORDER_STATUS.OPEN
 
-	@property
-	def triggered(self):
-		"""
-		For a market order, True.
-		For a stop order, True IFF stop_reached.
-		For a limit order, True IFF limit_reached.
-		For a stop-limit order, True IFF (stop_reached AND limit_reached)
-		"""
-		if self.stop and not self.stop_reached:
-			return False
+    @property
+    def triggered(self):
+        """
+        For a market order, True.
+        For a stop order, True IFF stop_reached.
+        For a limit order, True IFF limit_reached.
+        For a stop-limit order, True IFF (stop_reached AND limit_reached)
+        """
+        if self.stop and not self.stop_reached:
+            return False
 
-		if self.limit and not self.limit_reached:
-			return False
+        if self.limit and not self.limit_reached:
+            return False
 
-		return True
+        return True
 
-	@property
-	def open_amount(self):
-		return self.amount - self.filled
+    @property
+    def open_amount(self):
+        return self.amount - self.filled

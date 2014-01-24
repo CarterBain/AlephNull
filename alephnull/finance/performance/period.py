@@ -233,7 +233,11 @@ class PerformancePeriod(object):
     def execute_transaction(self, txn):
         # Update Position
         # ----------------
-        position = self.positions[txn.sid]
+        if 'contract' in txn.__dict__:
+            position = self.positions[(txn.sid, txn.contract)]
+        else:
+            position = self.positions[txn.sid]
+
         position.update(txn)
         self.ensure_position_index(txn.sid)
         self._position_amounts[txn.sid] = position.amount
@@ -275,12 +279,20 @@ class PerformancePeriod(object):
         is_trade = event.type == zp.DATASOURCE_TYPE.TRADE
         has_price = not np.isnan(event.price)
         # isnan check will keep the last price if its not present
-        if (event.sid in self.positions) and is_trade and has_price:
+        if 'contract' in event:
+            is_contract_tracked = ((event.sid, event.contract) in self.positions)
+        else:
+            is_contract_tracked = (event.sid in self.positions)
+
+        if is_contract_tracked and is_trade and has_price:
             self.positions[event.sid].last_sale_price = event.price
             self.ensure_position_index(event.sid)
             self._position_last_sale_prices[event.sid] = event.price
 
-            self.positions[event.sid].last_sale_date = event.dt
+            if 'contract' in event:
+                self.positions[(event.sid, event.contract)].last_sale_date = event.dt
+            else:
+                self.positions[event.sid].last_sale_date = event.dt
 
     def __core_dict(self):
         rval = {
@@ -368,13 +380,15 @@ class PerformancePeriod(object):
         return portfolio
 
     def get_positions(self):
-
         positions = self._positions_store
 
         for sid, pos in self.positions.iteritems():
 
             if sid not in positions:
-                positions[sid] = zp.Position(sid)
+                if type(sid) is tuple:
+                    positions[sid] = zp.Position(sid[0], contract=sid[1])
+                else:
+                    positions[sid] = zp.Position(sid)
             position = positions[sid]
             position.amount = pos.amount
             position.cost_basis = pos.cost_basis
@@ -389,14 +403,14 @@ class PerformancePeriod(object):
                 positions.append(pos.to_dict())
         return positions
 
-
-class FuturesPerformancePeriod(object):
-    """We need to replicate:
+FuturesPerformancePeriod = PerformancePeriod
+"""class FuturesPerformancePeriod(object):
+    "We need to replicate:
     * calculate_performance
     * execute_transaction
     * record_order
     * update_last_sale
-    """
+    "
     def __init__(
             self,
             starting_cash,
@@ -417,17 +431,43 @@ class FuturesPerformancePeriod(object):
         self.initial_margin_rate = 0.30
 
         self.contract_details = {}  # set externally if at all
+        self.margin_data = {}  # set externally if at all
         self.margin_call = self.scale_back_positions  # can be set to another function externally
         self.gameover = False
 
+        self.algo = None
+
+    def get_initial_margin(self, sid, timestamp, contract_value):
+        return self.get_margin("initial", sid, timestamp, contract_value)
+
+    def get_maintenance_margin(self, sid, timestamp, contract_value):
+        return self.get_margin("maintenance", sid, timestamp, contract_value)
+
+    def get_margin(self, margin_type, sid, timestamp, contract_value):
+        # provides initial margin for a sid, basing it on the latest_price if there is no data available.
+        multiplier = {"initial": 0.25, "maintenance": 0.2}[margin_type]
+
+        # the structure of self.margin_data is like so:
+        # self.margin_data["initial"]["GS"]["N14"][Timestamp] == 300.03
+        # where the final dict in the nesting is a TimeSeries
+        if (margin_type in self.margin_data and
+                sid[0] in self.margin_data[margin_type] and
+                sid[1] in self.margin_data[margin_type][sid[0]]):
+            series = self.margin_data[margin_type][sid[0]][sid[1]]
+            previous_data = series[:timestamp]
+            if previous_data:
+                return previous_data[-1]
+        return contract_value * multiplier
+
+
     def unit_multiplier(self, currency):
-        """Returns a number C such that given_price / C = value of item in dollars.
+        "Returns a number C such that given_price / C = value of item in dollars.
         Another way of figuring is that 1 USD = C other currencies
         Exchange rates are estimated based on the time this is programmed and are thus in no way accurate.
         We're not really dealing with currencies so I don't much mind.
         The ones that matter are mainly dollars and cents (C's of 1 and 100 of course)
 
-        Defaults to 1 if we don't know what to do."""
+        Defaults to 1 if we don't know what to do."
 
         return {'$': 1,
                 '$/GAL': 1,
@@ -524,26 +564,27 @@ class FuturesPerformancePeriod(object):
             self.margin_history[txn.dt] = self.margin_account_value
             return
 
-        margin_for_new_txn = txn.price * self.get_multiplier(txn.sid) * self.initial_margin_rate * txn.amount
+        margin_for_new_txn = self.get_initial_margin(txn.sid, txn.dt,
+            txn.price * self.get_multiplier(txn.sid)) * txn.amount
 
         if txn.sid in self.owned_positions:
             self.recalculate_margin_from_price_change(txn.sid, txn.price - txn.commission)
 
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
+            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin(txn.dt):
                 self.owned_positions[txn.sid]['amount'] += txn.amount
                 self.margin_account_value -= txn.commission * txn.amount
         else:  # buying the first units of a contract
-            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin():
+            if margin_for_new_txn <= self.margin_account_value - self.calculate_maintenance_margin(txn.dt):
                 self.owned_positions[txn.sid] = {'amount': txn.amount, 'last_price': txn.price}
 
-    def calculate_maintenance_margin(self):
-        """Uses the owned_positions dictionary to calculate the minimum a margin account must meet in order for
-        new transactions to take place."""
+    def calculate_maintenance_margin(self, timestamp):
+        "Uses the owned_positions dictionary to calculate the minimum a margin account must meet in order for
+        new transactions to take place."
 
         maintenance_margin = 0
         for sid, position in self.owned_positions.iteritems():
-            maintenance_margin += self.get_multiplier(sid) * position['last_price'] * \
-                                  self.maintenance_margin_rate * position['amount']
+            maintenance_margin += self.get_maintenance_margin(sid, timestamp,
+                self.get_multiplier(sid) * position['last_price']) * position['amount']
         return maintenance_margin
 
     def update_last_sale(self, event):
@@ -553,13 +594,13 @@ class FuturesPerformancePeriod(object):
 
         if event.sid in self.owned_positions:
             self.recalculate_margin_from_price_change(event.sid, event.price)
-            if self.calculate_maintenance_margin() > self.margin_account_value:
-                self.margin_call()
+            if self.calculate_maintenance_margin(event.dt) > self.margin_account_value:
+                self.margin_call(event.dt)
 
         self.margin_history[event.dt] = self.margin_account_value
 
     def recalculate_margin_from_price_change(self, sid, new_price):
-        """Adjusts the margin account value to compensate with a change in price of an already-owned contract"""
+        "Adjusts the margin account value to compensate with a change in price of an already-owned contract"
         last_price = self.owned_positions[sid]['last_price']
         amount = self.owned_positions[sid]['amount']
 
@@ -571,7 +612,7 @@ class FuturesPerformancePeriod(object):
         if self.margin_account_value <= 0:
             self.gameover = True
 
-    def scale_back_positions(self):
+    def scale_back_positions(self, timestamp):
         # A default option for margin calls where it goes through positions alphabetically exits those positions until
         # the maintenance margin is below the margin account value
 
@@ -579,13 +620,14 @@ class FuturesPerformancePeriod(object):
         #  self.calculate_maintenance_margin() > self.margin_account_value
 
         positions = list(reversed(sorted(self.owned_positions.items())))
-        while self.calculate_maintenance_margin() > self.margin_account_value:
-            shortfall = self.calculate_maintenance_margin() - self.margin_account_value
+        while self.calculate_maintenance_margin(timestamp) > self.margin_account_value:
+            shortfall = self.calculate_maintenance_margin(timestamp) - self.margin_account_value
             position = positions.pop()
             sid = position[0]
             details = position[1]
 
-            margin_per_contract = self.get_multiplier(sid) * details['last_price'] * self.maintenance_margin_rate
+            contract_value = self.get_multiplier(sid) * details['last_price']
+            margin_per_contract = self.get_maintenance_margin(sid, timestamp, contract_value)
             contracts_to_exit_amount = int(shortfall / margin_per_contract) + 1
             if contracts_to_exit_amount >= details['amount']:
                 del self.owned_positions[sid]
@@ -594,4 +636,4 @@ class FuturesPerformancePeriod(object):
 
 
     def __getattr__(self, name):
-        return getattr(self.backing_period, name)
+        return getattr(self.backing_period, name)"""
