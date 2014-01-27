@@ -102,8 +102,11 @@ class Blotter(object):
         """
 
         if type(sid) is tuple:
+            whole_sid = sid
             contract = sid[1]
             sid = sid[0]
+        else:
+            whole_sid = sid
 
         # Fractional shares are not supported.
         amount = int(amount)
@@ -143,7 +146,7 @@ class Blotter(object):
 
         # initialized filled field.
         order.filled = 0
-        self.open_orders[order.sid].append(order)
+        self.open_orders[whole_sid].append(order)
         self.orders[order.id] = order
         self.new_orders.append(order)
 
@@ -209,6 +212,7 @@ class Blotter(object):
                        'filled {} of {} shares, outstanding {} shares cancelled'
 
         #if this offsets an existing position return
+
         if self.portfolio.positions[order.sid].amount + txn.amount != 0:
             #test to see if this is a short position
 
@@ -239,6 +243,43 @@ class Blotter(object):
                         txn.amount = 0
                         txn.commission = 0
 
+    def futures_handle_leverage(self, txn, order):
+        leverage_err = 'INSUFFICIENT CAPITAL\n' \
+                       'requested to transact ${} of {}, with ${} available \n' \
+                       'filled {} of {} shares, outstanding {} shares cancelled'
+
+        #if this offsets an existing position return
+
+        sid = (order.sid, order.contract)
+
+        if self.portfolio.positions[sid].amount + txn.amount != 0:
+            #test to see if this is a short position
+
+            if txn.amount + self.portfolio.positions[sid].amount < 0:
+                if order.direction < 0:
+                    if abs(txn.price * (txn.amount + order.filled)) * .5 > self.portfolio.portfolio_value:
+                        log.info(leverage_err.format(
+                            txn.price * (txn.amount + order.filled),
+                            order.sid, self.portfolio.portfolio_value / .5,
+                            order.filled, order.amount,
+                            order.amount - order.filled))
+                        order.direction *= -1
+                        self.cancel(order.id)
+                        txn.amount = -0
+                        txn.commission = 0
+
+            #test to see if this is a long position
+            if txn.amount + self.portfolio.positions[sid].amount > 0:
+                if order.direction > 0:
+                    if txn.price * (txn.amount + order.filled) > self.portfolio.cash:
+                        log.info(leverage_err.format(
+                            txn.price * (txn.amount + order.filled),
+                            order.sid, self.portfolio.cash,
+                            order.filled, order.amount,
+                            order.amount - order.filled))
+                        self.cancel(order.id)
+                        txn.amount = 0
+                        txn.commission = 0
 
     def process_trade(self, trade_event):
 
@@ -250,8 +291,13 @@ class Blotter(object):
             # less frequently than once per minute.
             return
 
-        if trade_event.sid in self.open_orders:
-            orders = self.open_orders[trade_event.sid]
+        if 'contract' in trade_event.__dict__:
+            sid = (trade_event.sid, trade_event.contract)
+        else:
+            sid = trade_event.sid
+
+        if sid in self.open_orders:
+            orders = self.open_orders[sid]
             orders = sorted(orders, key=lambda o: o.dt)
             # Only use orders for the current day or before
             current_orders = filter(
@@ -265,7 +311,10 @@ class Blotter(object):
                 yield txn, order
                 continue
 
-            self.handle_leverage(txn, order)
+            if 'contract' in order.__dict__:
+                self.futures_handle_leverage(txn, order)
+            else:
+                self.handle_leverage(txn, order)
             transaction_cost = txn.amount * txn.price
             self.portfolio.cash -= transaction_cost
             self.portfolio.positions_value += transaction_cost
@@ -289,9 +338,9 @@ class Blotter(object):
             yield txn, order
 
         # update the open orders for the trade_event's sid
-        self.open_orders[trade_event.sid] = \
+        self.open_orders[sid] = \
             [order for order
-             in self.open_orders[trade_event.sid]
+             in self.open_orders[sid]
              if order.open]
 
 

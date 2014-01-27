@@ -275,24 +275,22 @@ class PerformancePeriod(object):
         return np.dot(self._position_amounts, self._position_last_sale_prices)
 
     def update_last_sale(self, event):
+        if 'contract' in event:
+            sid = (event.sid, event.contract)
+        else:
+            sid = event.sid
 
         is_trade = event.type == zp.DATASOURCE_TYPE.TRADE
         has_price = not np.isnan(event.price)
         # isnan check will keep the last price if its not present
-        if 'contract' in event:
-            is_contract_tracked = ((event.sid, event.contract) in self.positions)
-        else:
-            is_contract_tracked = (event.sid in self.positions)
+
+        is_contract_tracked = sid in self.positions
 
         if is_contract_tracked and is_trade and has_price:
-            self.positions[event.sid].last_sale_price = event.price
-            self.ensure_position_index(event.sid)
-            self._position_last_sale_prices[event.sid] = event.price
-
-            if 'contract' in event:
-                self.positions[(event.sid, event.contract)].last_sale_date = event.dt
-            else:
-                self.positions[event.sid].last_sale_date = event.dt
+            self.positions[sid].last_sale_price = event.price
+            self.ensure_position_index(sid)
+            self._position_last_sale_prices[sid] = event.price
+            self.positions[sid].last_sale_date = event.dt
 
     def __core_dict(self):
         rval = {
