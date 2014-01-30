@@ -14,6 +14,9 @@
 # limitations under the License.
 from logbook import Logger, Processor
 
+import pandas as pd
+from pandas import DataFrame
+
 import alephnull.finance.trading as trading
 from alephnull.protocol import (
     BarData,
@@ -21,6 +24,7 @@ from alephnull.protocol import (
     DATASOURCE_TYPE
     )
 from alephnull.gens.utils import hash_args
+
 
 log = Logger('Trade Simulation')
 
@@ -92,6 +96,37 @@ class AlgorithmSimulator(object):
             self.algo.perf_tracker.process_event(order)
         self.algo.perf_tracker.process_event(event)
 
+    def roll(self, data):
+        positions = self.portfolio.positions
+
+        bardf = pd.concat({sym: DataFrame({con: t.__dict__ for con, t in con.iteritems()})
+                   for sym, con in data.__dict__['_data'].iteritems()}, axis=1).swapaxes(0,1)
+
+
+
+        #ToDo: implement filter to handle multiple contract returns
+        frontdf = bardf.groupby(level=0).apply(
+                                        lambda x: x[x['open_interest'] ==
+                                                    x['open_interest'].max()]).swapaxes(0,1)
+
+        frontdf = bardf.groupby(level=0).apply(
+                                        lambda x: x[x['volume'] ==
+                                                    x['volume'].max()]).swapaxes(0,1)
+
+
+
+        frontdf.columns = frontdf.columns.droplevel(0)
+        self.frontmonth = {key[0]: data[key[0]][key[1]] for key in frontdf.columns.values}
+
+        if len(positions.keys()) > 0:
+            for pos in positions.keys():
+                if pos not in list(frontdf.columns):
+                    size = positions[pos].amount
+                    if size != 0:
+                        print str(pos) + '--->' + str((pos[0], str(frontdf[pos[0]].columns[0])))
+                        self.order(pos, -size, fill=True)
+                        self.order((pos[0], str(frontdf[pos[0]].columns[0])), size, fill=True)
+
     def transform(self, stream_in):
         """
         Main generator work loop.
@@ -153,6 +188,7 @@ class AlgorithmSimulator(object):
                     # Send the current state of the universe
                     # to the user's algo.
                     if updated:
+
                         self.algo.handle_data(self.current_data)
                         updated = False
 

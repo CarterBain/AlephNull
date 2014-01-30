@@ -315,6 +315,7 @@ class Blotter(object):
                 self.futures_handle_leverage(txn, order)
             else:
                 self.handle_leverage(txn, order)
+
             transaction_cost = txn.amount * txn.price
             self.portfolio.cash -= transaction_cost
             self.portfolio.positions_value += transaction_cost
@@ -344,7 +345,7 @@ class Blotter(object):
              if order.open]
 
 
-class Order(object):
+class Order(object) :
     def __init__(self, dt, sid, amount, stop=None, limit=None, filled=0, id=None, contract=None):
         """
         @dt - datetime.datetime that the order was placed
