@@ -29,8 +29,6 @@ import pytz
 from . import benchmarks
 from . benchmarks import get_benchmark_returns
 
-from alephnull.utils.date_utils import tuple_to_date
-from operator import attrgetter
 from alephnull.utils.tradingcalendar import (
     trading_day,
     trading_days
