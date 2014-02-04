@@ -279,7 +279,6 @@ must specify stocks or indexes"""
 
     if stocks is not None:
         for stock in stocks:
-            print stock
             cache_filename = "{stock}-{start}-{end}.csv".format(
                 stock=stock,
                 start=start,
@@ -294,7 +293,6 @@ must specify stocks or indexes"""
 
     if indexes is not None:
         for name, ticker in indexes.iteritems():
-            print name
             stkd = DataReader(ticker, 'yahoo', start, end).sort_index()
             data[name] = stkd
 

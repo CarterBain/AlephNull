@@ -234,13 +234,15 @@ class PerformancePeriod(object):
         # Update Position
         # ----------------
         if 'contract' in txn.__dict__:
-            position = self.positions[(txn.sid, txn.contract)]
+            sid = (txn.sid, txn.contract)
         else:
-            position = self.positions[txn.sid]
+            sid = txn.sid
+
+        position = self.positions[sid]
 
         position.update(txn)
-        self.ensure_position_index(txn.sid)
-        self._position_amounts[txn.sid] = position.amount
+        self.ensure_position_index(sid)
+        self._position_amounts[sid] = position.amount
 
         self.period_cash_flow -= txn.price * txn.amount
 
@@ -401,7 +403,7 @@ class PerformancePeriod(object):
                 positions.append(pos.to_dict())
         return positions
 
-FuturesPerformancePeriod = PerformancePeriod
+
 """class FuturesPerformancePeriod(object):
     "We need to replicate:
     * calculate_performance

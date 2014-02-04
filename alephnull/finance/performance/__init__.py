@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . tracker import PerformanceTracker
+from . tracker import PerformanceTracker, FuturesPerformanceTracker
 from . period import PerformancePeriod
 from . position import Position
 
 __all__ = [
     'PerformanceTracker',
+    'FuturesPerformanceTracker',
     'PerformancePeriod',
     'Position',
+    'FuturesPerformancePeriod',
 ]

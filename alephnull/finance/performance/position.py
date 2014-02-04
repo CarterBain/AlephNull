@@ -200,11 +200,6 @@ last_sale_price: {last_sale_price}"
 
 class positiondict(dict):
 
-    def __setitem__(self, key, value):
-        if key == ("ZN", "Z11"):
-            raise ZeroDivisionError
-        super(positiondict, self).__setitem__(key, value)
-
     def __missing__(self, key):
         if type(key) is tuple:
             pos = Position(key[0], contract=key[1])

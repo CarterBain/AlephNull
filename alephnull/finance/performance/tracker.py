@@ -66,19 +66,21 @@ from pandas.tseries.tools import normalize_date
 import alephnull.protocol as zp
 import alephnull.finance.risk as risk
 from alephnull.finance import trading
-from . period import PerformancePeriod, FuturesPerformancePeriod
+from . period import PerformancePeriod
+from . futures_period import FuturesPerformancePeriod
 
 log = logbook.Logger('Performance')
 
 
-class PerformanceTracker(object):
+class BasePerformanceTracker(object):
     """
     Tracks the performance of the algorithm.
     """
 
-    def __init__(self, sim_params):
+    def __init__(self, sim_params, perf_tracker_class):
 
         self.sim_params = sim_params
+        self.perf_tracker_class = perf_tracker_class
 
         self.period_start = self.sim_params.period_start
         self.period_end = self.sim_params.period_end
@@ -117,7 +119,7 @@ class PerformanceTracker(object):
                                            returns_frequency='daily',
                                            create_first_day_stats=True)
 
-            self.minute_performance = PerformancePeriod(
+            self.minute_performance = self.perf_tracker_class(
                 # initial cash is your capital base.
                 self.capital_base,
                 # the cumulative period will be calculated over the
@@ -135,7 +137,7 @@ class PerformanceTracker(object):
 
         # this performance period will span the entire simulation from
         # inception.
-        self.cumulative_performance = PerformancePeriod(
+        self.cumulative_performance = self.perf_tracker_class(
             # initial cash is your capital base.
             self.capital_base,
             # the cumulative period will be calculated over the entire test.
@@ -151,7 +153,7 @@ class PerformanceTracker(object):
         self.perf_periods.append(self.cumulative_performance)
 
         # this performance period will span just the current market day
-        self.todays_performance = PerformancePeriod(
+        self.todays_performance = self.perf_tracker_class(
             # initial cash is your capital base.
             self.capital_base,
             # the daily period will be calculated for the market day
@@ -169,23 +171,6 @@ class PerformanceTracker(object):
         self.day_count = 0.0
         self.txn_count = 0
         self.event_count = 0
-		
-        self.futures_cumulative_performance = FuturesPerformancePeriod(
-             # initial cash is your capital base.
-            self.capital_base,
-            # the cumulative period will be calculated over the entire test.
-            self.period_start,
-            self.period_end,
-            # don't save the transactions for the cumulative
-            # period
-            keep_transactions=False,
-            keep_orders=False,
-            # don't serialize positions for cumualtive period
-            serialize_positions=False
-        )
-
-        self.perf_periods.append(self.futures_cumulative_performance)
-        #self.futures_cumulative_performance.algo = self.algo
 
     def __repr__(self):
         return "%s(%r)" % (
@@ -407,3 +392,11 @@ class PerformanceTracker(object):
 
         risk_dict = self.risk_report.to_dict()
         return risk_dict
+
+
+def PerformanceTracker(sim_params):
+    return BasePerformanceTracker(sim_params, PerformancePeriod)
+
+
+def FuturesPerformanceTracker(sim_params):
+    return BasePerformanceTracker(sim_params, FuturesPerformancePeriod)

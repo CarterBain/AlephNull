@@ -27,7 +27,7 @@ from alephnull.errors import (
     UnsupportedCommissionModel,
     OverrideCommissionPostInit
     )
-from alephnull.finance.performance import PerformanceTracker
+from alephnull.finance.performance import PerformanceTracker, FuturesPerformanceTracker
 from alephnull.sources import DataFrameSource, DataPanelSource
 from alephnull.utils.factory import create_simulation_parameters
 from alephnull.transforms.utils import StatefulTransform
@@ -50,6 +50,12 @@ from alephnull.gens.composites import (
 from alephnull.gens.tradesimulation import AlgorithmSimulator
 
 DEFAULT_CAPITAL_BASE = float("1.0e5")
+
+
+class AssetTypeEnum(object):
+    def __init__(self):
+        self.EQUITY = 0
+        self.FUTURES = 1
 
 
 class TradingAlgorithm(object):
@@ -75,6 +81,7 @@ class TradingAlgorithm(object):
     stats = my_algo.run(data)
 
     """
+    asset_types = AssetTypeEnum()
 
     def __init__(self, *args, **kwargs):
         """Initialize sids and other state variables.
@@ -88,8 +95,12 @@ class TradingAlgorithm(object):
             capital_base : float <default: 1.0e5>
                How much capital to start with.
         """
+
         self._portfolio = None
         self.datetime = None
+
+        # can be reset in a subclass's initialize() method
+        self.asset_type = self.asset_types.EQUITY
 
         self.registered_transforms = {}
         self.transforms = []
@@ -213,7 +224,14 @@ class TradingAlgorithm(object):
 
         self.data_gen = self._create_data_generator(source_filter,
                                                     sim_params)
-        self.perf_tracker = PerformanceTracker(sim_params)
+
+        if self.asset_type == self.asset_types.EQUITY:
+            self.perf_tracker = PerformanceTracker(sim_params)
+        elif self.asset_type == self.asset_types.FUTURES:
+            self.perf_tracker = FuturesPerformanceTracker(sim_params)
+        else:
+            self.perf_tracker = PerformanceTracker(sim_params)
+
         self.trading_client = AlgorithmSimulator(self, sim_params)
 
         transact_method = transact_partial(self.slippage, self.commission)
