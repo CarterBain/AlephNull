@@ -157,6 +157,7 @@ class SlippageModel(object):
                 yield order, txn
 
     def __call__(self, event, current_orders, **kwargs):
+
         return self.simulate(event, current_orders, **kwargs)
 
 

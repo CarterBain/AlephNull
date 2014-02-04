@@ -403,6 +403,15 @@ class TradingAlgorithm(object):
             orders = self.blotter.open_orders[sid]
             return [order.to_api_obj() for order in orders]
         return []
+	def get_orders(self, sid=None):
+		"""
+		Return order events
+		"""
+		orders = {id_: {(self.blotter.orders[id_].__dict__['sid'],
+		                 self.blotter.orders[id_].__dict__['contract']):
+			                self.blotter.orders[id_].__dict__} for id_ in
+		          self.blotter.orders.keys()}
+		orders = [{sym: {key: v} for sym, v in orders[key].iteritems()} for key in orders.keys()]
 
     @property
     def recorded_vars(self):
