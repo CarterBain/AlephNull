@@ -1,11 +1,9 @@
-
 import pandas as pd
 
 from alephnull.gens.utils import hash_args
 
 from alephnull.sources.data_source import DataSource
 
-from alephnull.finance.performance.tracker import PerformanceTracker
 
 class FuturesDataFrameSource(DataSource):
     """
@@ -53,7 +51,7 @@ class FuturesDataFrameSource(DataSource):
         return {
             'dt': (lambda x: x, 'dt'),
             'sid': (lambda x: x[:x.find(".")], 'sid'),
-            'contract': (lambda x: x[x.find(".")+1:], 'sid'),
+            'contract': (lambda x: x[x.find(".") + 1:], 'sid'),
             'price': (float, 'price'),
             'volume': (int, 'volume'),
             'open_interest': (int, 'open_interest'),

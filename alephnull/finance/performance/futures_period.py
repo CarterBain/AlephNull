@@ -1,22 +1,25 @@
 from __future__ import division
-import logbook
 import math
-import re
-
-import numpy as np
-import pandas as pd
 from collections import OrderedDict, defaultdict
 
-import alephnull.protocol as zp
-from . position import positiondict
+import logbook
+import numpy as np
+import pandas as pd
 
-from alephtools.connection import get_multiplier
+import alephnull.protocol as zp
+from .position import positiondict
+
+
+try:
+    from alephtools.connection import get_multiplier
+except:
+    #Replace this with source to multiplier
+    get_multiplier = lambda x: 25
 
 log = logbook.Logger('Performance')
 
 
 class FuturesPerformancePeriod(object):
-
     def __init__(
             self,
             starting_cash,
@@ -117,7 +120,7 @@ class FuturesPerformancePeriod(object):
         self.adjust_cash(-commission.cost)
         # Adjust the cost basis of the stock if we own it
         if commission.sid in self.positions:
-            self.positions[commission.sid].\
+            self.positions[commission.sid]. \
                 adjust_commission_cost_basis(commission)
 
     def adjust_cash(self, amount):
@@ -192,7 +195,7 @@ class FuturesPerformancePeriod(object):
 
             # we're adding a 10% cushion to the capital used.
             self.max_leverage = 1.1 * \
-                self.max_capital_used / self.starting_mav
+                                self.max_capital_used / self.starting_mav
 
         # add transaction to the list of processed transactions
         if self.keep_transactions:
