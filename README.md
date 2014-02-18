@@ -27,26 +27,6 @@ Dependencies (zipline)
 * iso8601
 * [python-dateutil](https://pypi.python.org/pypi/python-dateutil) (>= 2.1)
 
-Style Guide
-------------
-
-To ensure that changes and patches are focused on behavior changes,
-the zipline codebase adheres to both PEP-8,
-<http://www.python.org/dev/peps/pep-0008/>, and pyflakes,
-<https://launchpad.net/pyflakes/>.
-
-The maintainers check the code using the flake8 script,
-<https://github.com/bmcustodio/flake8>, which is included in the
-requirements_dev.txt.
-
-Before submitting patches or pull requests, please ensure that your
-changes pass ```flake8 zipline tests``` and ```nosetests```
-
-Build Status
-============
-
-[![Build Status](https://travis-ci.org/quantopian/zipline.png)](https://travis-ci.org/quantopian/zipline)
-
 Contact
 =======
 brandon.ogle@carterbain.com
