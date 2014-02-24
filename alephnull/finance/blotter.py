@@ -355,9 +355,10 @@ class Order(object) :
                   a negative sign indicates a sell
         @filled - how many shares of the order have been filled so far
         """
-        # get a string representation of the uuid.
-        if 'contract' is not None:
+
+        if contract is not None:
             self.contract = contract
+        # get a string representation of the uuid.
         self.id = id or self.make_id()
         self.dt = dt
         self.created = dt
