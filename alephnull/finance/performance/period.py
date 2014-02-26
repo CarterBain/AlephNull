@@ -73,19 +73,16 @@ omitted).
 """
 
 from __future__ import division
-import logbook
 import math
-import re
+from collections import OrderedDict, defaultdict
 
+import logbook
 import numpy as np
 import pandas as pd
-from collections import OrderedDict, defaultdict
 
 import alephnull.protocol as zp
 from . position import positiondict
 
-from pandas.tslib import Timestamp
-from datetime import timedelta
 
 log = logbook.Logger('Performance')
 
@@ -255,7 +252,7 @@ class PerformancePeriod(object):
         if math.fabs(self.cumulative_capital_used) > self.max_capital_used:
             self.max_capital_used = math.fabs(self.cumulative_capital_used)
 
-            # We want to conveye a level, rather than a precise figure.
+            # We want to convey a level, rather than a precise figure.
             # round to the nearest 5,000 to keep the number easy on the eyes
             self.max_capital_used = self.round_to_nearest(
                 self.max_capital_used,

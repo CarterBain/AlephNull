@@ -49,6 +49,7 @@ from alephnull.gens.composites import (
     )
 from alephnull.gens.tradesimulation import AlgorithmSimulator
 
+
 DEFAULT_CAPITAL_BASE = float("1.0e5")
 
 
@@ -138,6 +139,27 @@ class TradingAlgorithm(object):
         if not self.blotter:
             self.blotter = Blotter()
 
+        self.live_execution = kwargs.pop('live_execution', False)
+
+        if self.live_execution:
+            # Only import and instantiate an IB Execution instance
+            # If it is explicitly requested in kwargs
+            # Todo: [BUG FIX] object instantiates on import and
+            # therefore connects to the IB API
+
+            from alephnull.live.broker import LiveExecution
+
+            self.live_execution = LiveExecution(call_msg=False)
+
+
+            # reconcile algo with InteractiveBrokers
+            self.capital_base = self.live_execution.total_cash()
+            self._portfolio = self.live_execution.ib_portfolio()
+            self._portfolio.cash = self._portfolio.starting_cash = self.capital_base
+            self._portfolio.portfolio_value = self._portfolio.cash + \
+                                              self._portfolio.positions_value
+
+
         # an algorithm subclass needs to set initialized to True when
         # it is fully initialized.
         self.initialized = False
@@ -221,14 +243,20 @@ class TradingAlgorithm(object):
         skipped.
         """
         sim_params.data_frequency = self.data_frequency
-
         self.data_gen = self._create_data_generator(source_filter,
                                                     sim_params)
 
+        # if live execution is active instantiate perf_tracker with
+        # the portfolio downloaded from IB
+        if self.live_execution is not None:
+            sim_params.starting_portfolio = self._portfolio
+
         if self.asset_type == self.asset_types.EQUITY:
             self.perf_tracker = PerformanceTracker(sim_params)
+
         elif self.asset_type == self.asset_types.FUTURES:
             self.perf_tracker = FuturesPerformanceTracker(sim_params)
+
         else:
             self.perf_tracker = PerformanceTracker(sim_params)
 
@@ -382,7 +410,14 @@ class TradingAlgorithm(object):
 
     def order(self, sid, amount, limit_price=None, stop_price=None):
         self.blotter.update_account(self.portfolio)
-        return self.blotter.order(sid, amount, limit_price, stop_price)
+        if not self.live_execution:
+            return self.blotter.order(sid, amount, limit_price, stop_price)
+        else:
+            # if we are actually executing trades, we create an order object
+            # and pass it to the IB client to infer order details and send
+            ord_id = self.blotter.order(sid, amount, limit_price, stop_price)
+            return ord_id
+            #return self.live_execution.order(self.blotter.orders[ord_id])
 
     def order_value(self, sid, value, limit_price=None, stop_price=None):
         last_price = self.trading_client.current_data[sid].price
@@ -403,15 +438,21 @@ class TradingAlgorithm(object):
             orders = self.blotter.open_orders[sid]
             return [order.to_api_obj() for order in orders]
         return []
-	def get_orders(self, sid=None):
-		"""
-		Return order events
-		"""
-		orders = {id_: {(self.blotter.orders[id_].__dict__['sid'],
-		                 self.blotter.orders[id_].__dict__['contract']):
-			                self.blotter.orders[id_].__dict__} for id_ in
-		          self.blotter.orders.keys()}
-		orders = [{sym: {key: v} for sym, v in orders[key].iteritems()} for key in orders.keys()]
+
+    def get_orders(self, sid=None):
+        """
+        Return order events
+        """
+        orders = {id_: {(self.blotter.orders[id_].__dict__['sid'],
+                         self.blotter.orders[id_].__dict__['contract']):
+                            self.blotter.orders[id_].__dict__} for id_ in
+                  self.blotter.orders.keys()}
+        orders = [{sym: {key: v} for sym, v in orders[key].iteritems()} for key in orders.keys()]
+        if sid:
+            return orders[sid]
+        else:
+            return orders
+
 
     @property
     def recorded_vars(self):
