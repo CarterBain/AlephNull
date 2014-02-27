@@ -24,8 +24,8 @@ from alephnull.utils.factory import load_from_yahoo
 
 
 syms = ['GS', 'AAPL', 'XOM', 'GOOG']
-start = datetime(2013, 1, 1, 0, 0, 0, 0, pytz.utc)
-end = datetime(2014, 2, 24, 0, 0, 0, 0, pytz.utc)
+start = datetime(2014, 2, 21, 0, 0, 0, 0, pytz.utc)
+end = datetime(2014, 2, 27, 0, 0, 0, 0, pytz.utc)
 data = load_from_yahoo(stocks=syms, indexes={}, start=start,
                        end=end)
 
@@ -36,12 +36,12 @@ class BuyStock(TradingAlgorithm):
         self.orders = []
 
     def handle_data(self, data):
-        print self.portfolio
         if not self.allocated:
             for sym in data:
                 ref = self.order(sym, 50)
                 self.orders.append(ref)
             self.allocated = True
+        print self.portfolio
 
 
 simple_algo = BuyStock(live_execution=True)

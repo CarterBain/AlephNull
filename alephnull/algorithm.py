@@ -193,6 +193,18 @@ class TradingAlgorithm(object):
                    blotter=repr(self.blotter),
                    recorded_vars=repr(self.recorded_vars))
 
+    def _init_positions(self):
+        for sid, pos in self._portfolio.positions.iteritems():
+            for perf_period in self.perf_tracker.perf_periods:
+                perf_period.update_position(
+                    sid=sid,
+                    contract=pos.contract if hasattr(pos, 'contract') else None,
+                    amount=pos.amount,
+                    last_sale_price=pos.last_sale_price,
+                    last_sale_date=None,
+                    cost_basis=pos.cost_basis)
+
+
     def _create_data_generator(self, source_filter, sim_params):
         """
         Create a merged data generator using the sources and
@@ -248,8 +260,6 @@ class TradingAlgorithm(object):
 
         # if live execution is active instantiate perf_tracker with
         # the portfolio downloaded from IB
-        if self.live_execution is not None:
-            sim_params.starting_portfolio = self._portfolio
 
         if self.asset_type == self.asset_types.EQUITY:
             self.perf_tracker = PerformanceTracker(sim_params)
@@ -259,6 +269,9 @@ class TradingAlgorithm(object):
 
         else:
             self.perf_tracker = PerformanceTracker(sim_params)
+
+        if self.live_execution is not None:
+            self._init_positions()
 
         self.trading_client = AlgorithmSimulator(self, sim_params)
 
