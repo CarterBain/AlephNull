@@ -3,4 +3,4 @@ AlephNull
 
 Website Credits:
 
-[img/intro.bg]
+![ScreenShot](/img/intro-bg.png)
