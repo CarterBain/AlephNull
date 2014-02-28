@@ -270,7 +270,7 @@ class TradingAlgorithm(object):
         else:
             self.perf_tracker = PerformanceTracker(sim_params)
 
-        if self.live_execution is not None:
+        if self.live_execution:
             self._init_positions()
 
         self.trading_client = AlgorithmSimulator(self, sim_params)
