@@ -26,16 +26,18 @@ def roll(logic):
             #Todo: get amount from blotter to catch outstanding orders
             #Todo: cancel those orders to prevent fill after offset
             for pos in outdated:
-                amount = -positions[pos].amount
+                amount = positions[pos].amount
                 if pos[0] in offsets:
-                    offsets[pos[0]] += -amount
+                    offsets[pos[0]] += amount
                 else:
-                    offsets[pos[0]] = -amount
+                    offsets[pos[0]] = amount
                 if amount != 0:
-                    self.order(pos, amount)
+                    self.order(pos, -amount)
 
             if offsets:
-                [self.order(pos, offsets[pos[0]]) for pos in front_months if offsets[pos[0]] != 0]
+                for pos in front_months:
+                    if pos[0] in offsets and offsets[pos[0]] != 0:
+                        self.order(pos, -offsets[pos[0]])
 
             return func(self, data)
 
