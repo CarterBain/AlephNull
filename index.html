@@ -1,405 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="">
     <meta name="author" content="">
-    <link rel="shortcut icon" href="assets/ico/favicon.png">
 
-    <title>Kelvin - Bootstrap 3 Resume Theme</title>
+    <title>AlephNull</title>
 
-    <!-- Bootstrap core CSS -->
-    <link href="assets/css/bootstrap.css" rel="stylesheet">
+    <!-- Bootstrap Core CSS -->
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" rel="stylesheet" type="text/css">
 
-    <!-- Custom styles for this template -->
-    <link href="assets/css/main.css" rel="stylesheet">
+    <!-- Fonts -->
+    <link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+    <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Montserrat:400,700' rel='stylesheet' type='text/css'>
+
+    <!-- Custom Theme CSS -->
+    <link href="css/grayscale.css" rel="stylesheet">
+
+</head>
+
+<body id="page-top" data-spy="scroll" data-target=".navbar-custom">
+
+    <nav class="navbar navbar-custom navbar-fixed-top" role="navigation">
+        <div class="container">
+            <div class="navbar-header page-scroll">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-main-collapse">
+                    <i class="fa fa-bars"></i>
+                </button>
+            	<a href="http://www.carterbain.com">
+            		<img class='navbar-brand' src='img/cb-logo.png'/>
+            	</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div class="collapse navbar-collapse navbar-right navbar-main-collapse">
+                <ul class="nav navbar-nav">
+                    <!-- Hidden li included to remove active class from about link when scrolled up past about section -->
+                    <li class="hidden">
+                        <a href="#page-top"></a>
+                    </li>
+                    <li class="page-scroll">
+                        <a href="#about">About</a>
+                    </li>
+                    <li class="page-scroll">
+                        <a href="#download">Download</a>
+                    </li>
+                    <li class="page-scroll">
+                        <a href="#contact">Contact</a>
+                    </li>
+                    <li class="page-scroll">
+                        <a href="Current State and Examples.html">Updates</a>
+                    </li>
+                </ul>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container -->
+    </nav>
+
+    <section class="intro">
+        <div class="intro-body">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-8 col-md-offset-2">
+                        <h1 class="brand-heading">AlephNull</h1>
+                        <p class="intro-text">An algorithmic trading platform built
+                        with python and open source technologies</p>
+                        <div class="page-scroll">
+                            <a href="#about" class="btn btn-circle">
+                                <i class="fa fa-angle-double-down animated"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="container content-section text-center">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2">
+                <h2>About Aleph</h2>
+                <p>Aleph is a fork of the <a href ='http://github.com/quantopian/zipline'>Zipline</a> trading library, with the aim to extend the platform to support futures trading and live execution on your local machine. Live Execution requires the addtional <a href='http://github.com/CarterBain/Medici'>Medici</a> module which extends IbPy to include a more pythonic client.</p>
+                <p>This project would not be possible without the great team over at Quantopian who provided the majority of the code base. If you don't require alternative asset classes you should use either Zipline or the 
+                <a href='http://Quantopian.com'> web based backtester</a> which provides the data and execution (beta) through Interactive Brokers.</p>
+                <p>Upon solidifying support for futures and live execution, our aim is to integrate methods for robust strategy optimization though machine learning and statistics packages</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="content-section text-center">
+        <div class="download-section">
+            <div class="container">
+                <div class="col-lg-8 col-lg-offset-2">
+                    <h2>Download Aleph</h2>
+                    <p>The source code for Aleph is available for download at the github link below. Building the source likely will not work, as the project is currently in an early alpha stage and setup.py hasn't been modified since forking from Zipline.</p>
+                    <a href="http://github.com/CarterBain/AlephNull" class="btn btn-default btn-lg">Visit Download Page</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="contact" class="container content-section text-center">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2">
+                <h2>Contact</h2>
+                <p>Feel free to email us to provide feedback on Aleph, give us suggestions on how to improve it or if you are interested in becoming a contributor.</p>
+                <p>brandon.ogle@carterbain.com.com</p>
+                <ul class="list-inline banner-social-buttons">
+                    
+                    <li><a href="https://github.com/CarterBain" class="btn btn-default btn-lg"><i class="fa fa-github fa-fw"></i> <span class="network-name">Github</span></a>
+                    </li>
+                
+                </ul>
+            </div>
+        </div>
+    </section>
+
     
-	<link rel="stylesheet" href="assets/css/font-awesome.min.css">
-    
-    <link href='http://fonts.googleapis.com/css?family=Lato:300,400,700,300italic,400italic' rel='stylesheet' type='text/css'>
-    <link href='http://fonts.googleapis.com/css?family=Raleway:400,300,700' rel='stylesheet' type='text/css'>
-    
-    <script src="assets/js/jquery.min.js"></script>
-    <script type="text/javascript" src="assets/js/smoothscroll.js"></script> 
-    <script src="assets/js/Chart.js"></script>
+    <!-- Custom Theme JavaScript -->
+    <script src="js/grayscale.js"></script>
+    <script src="http://code.jquery.com/jquery.js"></script>
+    <script src="js/bootstrap.min.js"></script>
 
-    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!--[if lt IE 9]>
-      <script src="assets/js/html5shiv.js"></script>
-      <script src="assets/js/respond.min.js"></script>
-    <![endif]-->
-  </head>
+</body>
 
-  <body data-spy="scroll" data-offset="0" data-target="#nav">
-
-	<div id="section-topbar">
-		<div id="topbar-inner">
-			<div class="container">
-				<div class="row">
-					<div class="dropdown">
-						<ul id="nav" class="nav">
-							<li class="menu-item"><a class="smoothScroll" href="#about" title="About"><i class="icon-user"></i></a></li>
-							<li class="menu-item"><a class="smoothScroll" href="#resume" title="Resume"><i class="icon-file"></i></a></li>
-							<li class="menu-item"><a class="smoothScroll" href="#work" title="Works"><i class="icon-briefcase"></i></a></li>
-							<li class="menu-item"><a class="smoothScroll" href="#contact" title="Contact"><i class="icon-envelope"></i></a></li>
-						</ul><!--/ uL#nav -->
-					</div><!-- /.dropdown -->
-
-					<div class="clear"></div>
-				</div><!--/.row -->
-			</div><!--/.container -->
-
-			<div class="clear"></div>
-		</div><!--/ #topbar-inner -->
-	</div><!--/ #section-topbar -->
-	
-	<div id="headerwrap">
-		<div class="container">
-			<div class="row centered">
-				<div class="col-lg-12">
-					<h1>William T. Kelvin</h1>
-					<h3>Web Designer | kelvin@blacktie.co</h3>
-				</div><!--/.col-lg-12 -->
-			</div><!--/.row -->
-		</div><!--/.container -->
-	</div><!--/.#headerwrap -->
-	
-
-	<section id="about" name="about"></section>
-	<div id="intro">
-		<div class="container">
-			<div class="row">
-				
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>ABOUT</h5>
-				</div>
-				<div class="col-lg-6">
-					<p>I'm web designer & front-end developer with 7 years of professional experience. I'm interested in all kinds of visual communication, but my major focus is on designing web, mobile & tablet interfaces. I also have skills in other fields like branding, icon design or web development.</p>
-				</div>
-				<div class="col-lg-3">
-					<p><a href="#"><i class="icon-file"></i></a> <sm>DOWNLOAD PDF</sm></p>
-				</div>
-				
-			</div><!--/.row -->
-		</div><!--/.container -->
-	</div><!--/ #intro -->
-
-
-	<section id="resume" name="resume"></section>
-	<!--EDUCATION DESCRIPTION -->
-	<div class="container desc">
-		<div class="row">
-
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>EDUCATION</h5>
-				</div>
-				<div class="col-lg-6">
-					<p><t>Master of Web Design</t><br/>
-						St. Patrick University <br/>
-						<i>3 Years Course</i>
-					</p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>GRADUATING IN MAY 2014</sm><br/>
-					<imp><sm>IN PROGRESS</sm></imp>
-					</p>
-				</div>
-	
-				<div class="col-lg-6 col-lg-offset-3">
-					<p><t>Degree of Web Developer</t><br/>
-						Hastings University <br/>
-						<i>2 Years Course</i>
-					</p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>JUNE 2012</sm></p>
-				</div>
-	
-		</div><!--/.row -->
-		<br>
-		<hr>
-	</div><!--/.container -->
-	
-	
-	<!--WORK DESCRIPTION -->
-	<div class="container desc">
-		<div class="row">
-
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>WORK</h5>
-				</div>
-				<div class="col-lg-6">
-					<p><t>Front-end Developer</t><br/>
-						Black Tie Corp. <br/>
-					</p>
-					<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.</more></p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>AUGUST 2012 - CURRENT</sm></p>
-				</div>
-	
-				<div class="col-lg-6 col-lg-offset-3">
-					<p><t>Web Designer - Intern</t><br/>
-						Onassis Ltd. <br/>
-					</p>
-					<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.</more></p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>JUNE 2010 - JULY 2012</sm></p>
-				</div>
-		</div><!--/.row -->
-		<br>
-		<hr>
-	</div><!--/.container -->
-
-
-	<!--AWARDS DESCRIPTION -->
-	<div class="container desc">
-		<div class="row">
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>AWARDS</h5>
-				</div>
-				<div class="col-lg-6">
-					<p><t>Best Web Design</t><br/>
-						Black Tie Site <br/>
-					</p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>NOVEMBER 2013</sm></p>
-				</div>
-	
-				<div class="col-lg-6 col-lg-offset-3">
-					<p><t>Designer of the Year</t><br/>
-						Awwwards Site
-					</p>
-					<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.</more></p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>2013</sm></p>
-				</div>
-		
-		</div><!--/.row -->
-		<br>
-	</div><!--/.container -->
-	
-	
-	<!--SKILLS DESCRIPTION -->
-	<div id="skillswrap">
-		<div class="container">
-			<div class="row">
-					<div class="col-lg-2 col-lg-offset-1">
-						<h5>SKILLS</h5>
-					</div>
-					<div class="col-lg-3 centered">
-						<canvas id="javascript" height="130" width="130"></canvas>
-						<p>Javascript</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 70,
-										color:"#1abc9c"
-									},
-									{
-										value : 30,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("javascript").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-					<div class="col-lg-3 centered">
-						<canvas id="bootstrap" height="130" width="130"></canvas>
-						<p>Bootstrap</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 90,
-										color:"#1abc9c"
-									},
-									{
-										value : 10,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("bootstrap").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-					<div class="col-lg-3 centered">
-						<canvas id="wordpress" height="130" width="130"></canvas>
-						<p>Wordpress</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 65,
-										color:"#1abc9c"
-									},
-									{
-										value : 35,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("wordpress").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-					
-					<div class="col-lg-3 col-lg-offset-3 centered">
-						<canvas id="html" height="130" width="130"></canvas>
-						<p>HTML/CSS</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 80,
-										color:"#1abc9c"
-									},
-									{
-										value : 20,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("html").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-					<div class="col-lg-3 centered">
-						<canvas id="photoshop" height="130" width="130"></canvas>
-						<p>Photoshop</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 70,
-										color:"#1abc9c"
-									},
-									{
-										value : 30,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("photoshop").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-					<div class="col-lg-3 centered">
-						<canvas id="illustrator" height="130" width="130"></canvas>
-						<p>Illustrator</p>
-						<br>
-						<script>
-							var doughnutData = [
-									{
-										value: 50,
-										color:"#1abc9c"
-									},
-									{
-										value : 50,
-										color : "#ecf0f1"
-									}
-								];
-								var myDoughnut = new Chart(document.getElementById("illustrator").getContext("2d")).Doughnut(doughnutData);
-						</script>
-					</div>
-
-			</div><!--/.row -->
-			<br>
-		</div><!--/.container -->
-	</div><!--/ #skillswrap -->
-
-
-
-	<section id="work" name="work"></section>
-	<!--PORTFOLIO DESCRIPTION -->
-	<div class="container desc">
-		<div class="row">
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>PORTFOLIO</h5>
-				</div>
-				<div class="col-lg-6">
-					<p><img class="img-responsive" src="assets/img/port01.jpg" alt=""></p>
-				</div>
-				<div class="col-lg-3">
-					<p>CANALS OF ENGLAND</p>
-				<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br/><br/>
-					<sm><i class="icon-tag"></i> design</sm></more> 
-				</p>
-				</div>
-	
-				<div class="col-lg-6 col-lg-offset-3">
-					<p><img class="img-responsive" src="assets/img/port02.jpg" alt=""></p>
-				</div>
-				<div class="col-lg-3">
-						<p>SANKEY</p>
-					<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br/><br/>
-						<sm><i class="icon-tag"></i> front-end</sm></more> 
-					</p>
-				</div>
-				
-				<div class="col-lg-6 col-lg-offset-3">
-					<p><img class="img-responsive" src="assets/img/port03.jpg" alt=""></p>
-				</div>
-				<div class="col-lg-3">
-						<p>WE GROW</p>
-					<p><more>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br/><br/>
-						<sm><i class="icon-tag"></i> web design</sm></more> 
-					</p>
-				</div>
-		
-		</div><!--/.row -->
-		<br>
-		<br>
-	</div><!--/.container -->
-	
-
-
-	<section id="contact" name="contact"></section>
-	<!--FOOTER DESCRIPTION -->
-	<div id="footwrap">
-		<div class="container">
-			<div class="row">
-			
-				<div class="col-lg-2 col-lg-offset-1">
-					<h5>CONTACT</h5>
-				</div>
-				<div class="col-lg-6">
-					<p><t>Email</t><br/>
-						william@blacktie.co <br/>
-					</p>
-					<p><t>Adress</t><br/>
-						Some Ave. 987 <br/>
-						Postal 23892 <br/>
-						London, England. <br/>
-					</p>
-					<p><t>Phone</t><br/>
-						+55 8933-2383 <br/>
-					</p>
-				</div>
-				<div class="col-lg-3">
-					<p><sm>SOCIAL LINKS</sm></p>
-					<p>
-						<a href="#"><i class="icon-dribbble"></i></a>
-						<a href="#"><i class="icon-twitter"></i></a>
-						<a href="#"><i class="icon-facebook"></i></a>
-						<a href="#"><i class="icon-linkedin"></i></a>
-						<a href="#"><i class="icon-apple"></i></a>
-
-					</p>
-				</div>
-			</div><!--/.row -->
-		</div><!--/.container -->
-	</div><!--/ #footer -->
-	
-	<div id="c">
-		<div class="container">
-			<p>Created by <a href="http://www.blacktie.co">BLACKTIE.CO</a></p>
-		
-		</div>
-	</div>
-	
-
-    <!-- Bootstrap core JavaScript
-    ================================================== -->
-    <!-- Placed at the end of the document so the pages load faster -->
-    <script src="assets/js/bootstrap.js"></script>
-  </body>
 </html>
