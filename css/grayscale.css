@@ -68,10 +68,6 @@ a:focus {
     width: 60px;
 }
 
-.contact-brand{
-    height: 75px;
-    width: 200px;
-}
 
 .navbar-brand:focus {
     outline: 0;
@@ -150,6 +146,14 @@ a:focus {
 
 .intro-text {
     font-size: 18px;
+    text-shadow: -.75px 0 black, 0 .75px black, .75px 0 black, 0 -.75px black
+}
+
+.footer-text{
+    font-family: Montserrat,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    padding-right: 50px;
+    text-align: right;
+    font-size: 10px;
     text-shadow: -.75px 0 black, 0 .75px black, .75px 0 black, 0 -.75px black
 }
 
