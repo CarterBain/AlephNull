@@ -135,10 +135,6 @@ class TradingAlgorithm(object):
         if self.sim_params:
             self.sim_params.data_frequency = self.data_frequency
 
-        self.blotter = kwargs.pop('blotter', None)
-        if not self.blotter:
-            self.blotter = Blotter()
-
         self.live_execution = kwargs.pop('live_execution', False)
 
         if self.live_execution:
@@ -149,7 +145,7 @@ class TradingAlgorithm(object):
 
             from alephnull.live.broker import LiveExecution
 
-            self.live_execution = LiveExecution(call_msg=False)
+            self.live_execution = LiveExecution(call_msg=True)
 
 
             # reconcile algo with InteractiveBrokers
@@ -158,6 +154,14 @@ class TradingAlgorithm(object):
             self._portfolio.cash = self._portfolio.starting_cash = self.capital_base
             self._portfolio.portfolio_value = self._portfolio.cash + \
                                               self._portfolio.positions_value
+
+            kwargs['blotter'] = self.live_execution.blotter
+
+        self.blotter = kwargs.pop('blotter', None)
+        if not self.blotter:
+            self.blotter = Blotter()
+
+
 
 
         # an algorithm subclass needs to set initialized to True when
@@ -423,14 +427,8 @@ class TradingAlgorithm(object):
 
     def order(self, sid, amount, limit_price=None, stop_price=None):
         self.blotter.update_account(self.portfolio)
-        if not self.live_execution:
-            return self.blotter.order(sid, amount, limit_price, stop_price)
-        else:
-            # if we are actually executing trades, we create an order object
-            # and pass it to the IB client to infer order details and send
-            ord_id = self.blotter.order(sid, amount, limit_price, stop_price)
-            return ord_id
-            #return self.live_execution.order(self.blotter.orders[ord_id])
+        return self.blotter.order(sid, amount, limit_price, stop_price)
+
 
     def order_value(self, sid, value, limit_price=None, stop_price=None):
         last_price = self.trading_client.current_data[sid].price

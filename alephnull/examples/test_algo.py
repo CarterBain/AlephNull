@@ -14,39 +14,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime as dt
+import string
 
-from datetime import datetime
-
-import pytz
+import numpy as np
+import pandas as pd
+from pandas import DataFrame
 
 from alephnull.algorithm import TradingAlgorithm
-from alephnull.utils.factory import load_from_yahoo
+from alephnull.sources.futures_data_frame_source import FuturesDataFrameSource
 
 
-syms = ['GS', 'AAPL', 'XOM', 'GOOG']
-start = datetime(2014, 2, 21, 0, 0, 0, 0, pytz.utc)
-end = datetime(2014, 2, 27, 0, 0, 0, 0, pytz.utc)
-data = load_from_yahoo(stocks=syms, indexes={}, start=start,
-                       end=end)
+source = DataFrame(np.random.uniform(100, 200, [60,30]))
+cols = ['price', 'volume', 'open_interest']
+scale = (len(source.columns) / len(cols))
+source.columns = [scale * cols]
+sym = lambda x: np.random.choice([abc for abc in x],
+                                 np.random.choice([2, 3]))
+month = lambda x: np.random.choice([abc for abc in x],
+                                   np.random.choice([1]))
+
+contracts = np.ravel([[(''.join(month(string.letters[:26])) +
+                        str(np.random.choice([14, 15, 16])))] * len(cols)
+                      for x in xrange(len(source.columns) / len(cols) / 2)])
+
+level_1 = len(source.columns) / len(contracts) * list(contracts)
+
+numsyms = len(source.columns) / (len(set(level_1)) * len(cols))
+underlyings = [''.join(sym(string.letters[:26])) for x in xrange(numsyms)]
+level_0 = np.ravel([[sym] * len(set(level_1)) * len(cols) for sym in underlyings])
+
+source.columns = pd.MultiIndex.from_tuples(zip(level_0, level_1, source.columns))
+source.index = pd.date_range(start=dt.datetime.utcnow() - dt.timedelta(days=len(source.index) - 1),
+                             end=dt.datetime.utcnow(), freq='D')
+
+futdata = FuturesDataFrameSource(source.tz_localize('UTC'))
+from alephnull.roll_method import roll
 
 
-class BuyStock(TradingAlgorithm):
-    def initialize(self):
-        self.allocated = False
-        self.orders = []
-
+class TradeFutures(TradingAlgorithm):
+    @roll(lambda x: x[x['open_interest'] >= x['open_interest'].max()])
     def handle_data(self, data):
-        if not self.allocated:
-            for sym in data:
-                ref = self.order(sym, 50)
-                self.orders.append(ref)
-            self.allocated = True
-        print self.portfolio
+        for sym in data:
+            self.order((sym, data[sym]['contract']), 5)
 
 
-simple_algo = BuyStock(live_execution=True)
-print simple_algo.portfolio
-results = simple_algo.run(data)
-simple_algo.live_execution.disconnect()
-
-
+bot = TradeFutures(live_execution=True)
+stats = bot.run(futdata)
