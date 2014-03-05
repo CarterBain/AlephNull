@@ -3,16 +3,19 @@ __author__ = 'oglebrandon'
 from logbook import Logger
 
 from ib.ext.Contract import Contract
+from ib.ext.ExecutionFilter import ExecutionFilter
 from ib.ext.Order import Order as IBOrder
 from alephnull.finance.blotter import Blotter
 from alephnull.utils.protocol_utils import Enum
+from alephnull.finance.slippage import Transaction
+import alephnull.protocol as zp
 
 
 # Medici fork of IbPy
 # https://github.com/CarterBain/Medici
 from ib.client.IBrokers import IBClient
-import alephnull.protocol as zp
 import datetime as dt
+import pytz
 
 log = Logger('Blotter')
 
@@ -29,6 +32,8 @@ def round_for_minimum_price_variation(x):
 
 
 class LiveBlotter(Blotter):
+    id_map = {}
+
     def __init__(self):
         super(LiveBlotter, self).__init__()
 
@@ -66,7 +71,7 @@ class LiveBlotter(Blotter):
 
         contract = Contract()
         contract.m_symbol = order_obj.sid
-        contract.m_exchange = 'USD'
+        contract.m_currency = 'USD'
 
         if hasattr(order_obj, 'contract'):
             # This is a futures contract
@@ -79,7 +84,49 @@ class LiveBlotter(Blotter):
             contract.m_secType = 'STK'
             contract.m_exchange = 'SMART'
 
-        return self.place_order(contract, ib_order)
+        ib_id = self.place_order(contract, ib_order)
+        self.id_map[order_obj.id] = ib_id
+
+        return order_obj.id
+
+    def cancel(self, order_id):
+        ib_id = self.id_map[order_id]
+        self.cancel_order(ib_id)
+        super(Blotter, self).order(order_id)
+
+    def process_trade(self, trade_event):
+
+        # checks if event is trade
+        if trade_event.type != zp.DATASOURCE_TYPE.TRADE:
+            return
+
+        # checks if is future contract
+        if hasattr(trade_event, 'contract'):
+            sid = (trade_event.sid, trade_event.cotract)
+        else:
+            sid = trade_event.sid
+
+        if sid in self.open_orders:
+            orders = self.open_orders[sid]
+            # sort orders by datetime, and filter out future dates
+            # lambda x: sort([order.dt for order in orders])
+
+        else:
+            return
+
+        for order, txn in self.get_transactions(trade_event, orders):
+            # check that not commission
+            order.filled += txn.amount
+            if order.amount - order.filled == 0:
+                order.status = ORDER_STATUS.FILLED
+            order.dt = txn.dt
+            print txn.__dict__
+            yield txn, order
+
+        self.open_orders[sid] = \
+            [order for order
+             in self.open_orders[sid]
+             if order.open]
 
 
 class LiveExecution(IBClient):
@@ -91,6 +138,9 @@ class LiveExecution(IBClient):
         super(LiveExecution, self).__init__(call_msg=call_msg)
         self._blotter = LiveBlotter()
         self._blotter.place_order = self.place_order
+        self._blotter.get_transactions = self.get_transactions
+        self._blotter.cancel_order = self.cancel_order
+        super(LiveExecution, self).__track_orders__()
 
     @property
     def blotter(self):
@@ -162,3 +212,62 @@ class LiveExecution(IBClient):
                     portfolio_store.positions = positions_store
 
         return portfolio_store
+
+    def get_transactions(self, event, orders):
+        import time
+
+        time.sleep(1)
+        efilter = ExecutionFilter()
+        efilter.m_symbol = event.sid
+
+        for order in orders:
+
+            # Todo: I need to refactor how executions are summoned, this is currently a huge bottleneck
+            # cycle through all executions matching the event sid
+            for execution in self.executions(efilter):
+                prior_execution = None
+
+                # further filter out any executions not matching the order.id
+                if execution.m_orderRef == order.id:
+
+                    # prevent processing of duplicate executions
+                    if execution != prior_execution:
+                        order_status_vals = (0, 0)
+
+                        # cycle through the order status messages to get transaction details
+                        for status in self.order_status(execution.m_orderId):
+
+                            # filter out duplicate transaction messages
+                            if (status['remaining'], status['filled']) != order_status_vals:
+
+                                # get execution date
+                                date = dt.datetime.strptime(execution.m_time,
+                                                            '%Y%m%d %H:%M:%S').replace(tzinfo=pytz.utc)
+                                amount = status['filled'] - order_status_vals[1]
+
+                                txn = {'sid': event.sid,
+                                       'amount': int(amount),
+                                       'dt': date,
+                                       'price': status['lastFillPrice'],
+                                       'order_id': order.id}
+
+                                transaction = Transaction(**txn)
+                                order_status_vals = (status['remaining'], status['filled'])
+                                #TODO: pretty sure there is still transactions are being duplicated still
+                                if order.status == ORDER_STATUS.OPEN:
+                                    yield order, transaction
+
+                    prior_execution = execution
+
+
+
+
+
+
+
+
+
+
+
+
+

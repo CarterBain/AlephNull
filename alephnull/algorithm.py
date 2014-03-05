@@ -26,7 +26,7 @@ from alephnull.errors import (
     OverrideSlippagePostInit,
     UnsupportedCommissionModel,
     OverrideCommissionPostInit
-    )
+)
 from alephnull.finance.performance import PerformanceTracker, FuturesPerformanceTracker
 from alephnull.sources import DataFrameSource, DataPanelSource
 from alephnull.utils.factory import create_simulation_parameters
@@ -35,7 +35,7 @@ from alephnull.finance.slippage import (
     VolumeShareSlippage,
     SlippageModel,
     transact_partial
-    )
+)
 from alephnull.finance.commission import PerShare, PerTrade
 from alephnull.finance.blotter import Blotter
 from alephnull.finance.constants import ANNUALIZER
@@ -46,7 +46,7 @@ from alephnull.gens.composites import (
     date_sorted_sources,
     sequential_transforms,
     alias_dt
-    )
+)
 from alephnull.gens.tradesimulation import AlgorithmSimulator
 
 
@@ -145,8 +145,7 @@ class TradingAlgorithm(object):
 
             from alephnull.live.broker import LiveExecution
 
-            self.live_execution = LiveExecution(call_msg=True)
-
+            self.live_execution = LiveExecution(call_msg=False)
 
             # reconcile algo with InteractiveBrokers
             self.capital_base = self.live_execution.total_cash()
