@@ -34,8 +34,10 @@ Position Tracking
 """
 
 from __future__ import division
-import logbook
 import math
+
+import logbook
+
 
 log = logbook.Logger('Performance')
 
@@ -190,11 +192,19 @@ last_sale_price: {last_sale_price}"
         Creates a dictionary representing the state of this position.
         Returns a dict object of the form:
         """
+        if hasattr(self, 'contract'):
+            return {
+                'sid': self.sid,
+                'contract': self.contract,
+                'amount': self.amount,
+                'cost_basis': self.cost_basis,
+                'last_sale_price': self.last_sale_price
+            }
         return {
-        'sid': self.sid,
-        'amount': self.amount,
-        'cost_basis': self.cost_basis,
-        'last_sale_price': self.last_sale_price
+            'sid': self.sid,
+            'amount': self.amount,
+            'cost_basis': self.cost_basis,
+            'last_sale_price': self.last_sale_price
         }
 
 

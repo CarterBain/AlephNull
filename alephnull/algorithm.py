@@ -458,10 +458,13 @@ class TradingAlgorithm(object):
                             self.blotter.orders[id_].__dict__} for id_ in
                   self.blotter.orders.keys()}
         orders = [{sym: {key: v} for sym, v in orders[key].iteritems()} for key in orders.keys()]
+        orders_flat = {}
+        for d in orders:
+            orders_flat.update(d)
         if sid:
-            return orders[sid]
+            return orders_flat[sid]
         else:
-            return orders
+            return orders_flat
 
 
     @property
