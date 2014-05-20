@@ -27,7 +27,4 @@ Dependencies (zipline)
 * iso8601
 * [python-dateutil](https://pypi.python.org/pypi/python-dateutil) (>= 2.1)
 
-Contact
-=======
-brandon.ogle@carterbain.com
-For questions about zipline, please contact <opensource@quantopian.com>.
+
